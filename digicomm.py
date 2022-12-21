@@ -114,31 +114,17 @@ def binvector2str(binvector):
 #
 def SRRC(alpha, SPS, span):
     if ((int(SPS) - SPS) > 1e-10):
-        raise ValueError('SRRC design: SPS must be an integer')
+        SPS = int(SPS)
     if ((int(span) - span) > 1e-10):
-        raise ValueError('SRRC design: span must be an integer')
+        span = int(span)
     if (alpha < 0):
        raise ValueError('SRRC design: alpha must be between 0 and 1')
     if (SPS <= 1):
         raise ValueError('SRRC design: SPS must be greater than 1')
 
-    nList = np.arange(-SPS*span, SPS*span+1)
+    n = np.arange(-SPS*span, SPS*span+1)+1e-9
 
-    # pre-allocate memory for weights
-    weights = np.zeros(len(nList))
-
-    # compute the weights on a sample by sample basis
-    for index in range(len(nList)):
-
-        # select the time index
-        n = nList[index]
-
-        # design equations
-        if (n == 0):
-            weights[index] = (1/np.sqrt(SPS))*((1-alpha) + (4*alpha/np.pi))
-        elif (np.abs(n*4*alpha) == SPS):
-            weights[index] = (alpha/np.sqrt(2*SPS))*( (1+(2/np.pi))*np.sin(np.pi/(4*alpha)) + (1-(2/np.pi))*np.cos(np.pi/(4*alpha)) )
-        else:
-            weights[index] = (1/np.sqrt(SPS))*( (np.sin(np.pi*n*(1-alpha)/SPS)) + (4*alpha*n/SPS)*(np.cos(np.pi*n*(1+alpha)/SPS)) ) / ( (np.pi*n/SPS) * (1 - (4*alpha*n/SPS)**2) )
-
-    return weights
+    h = (1/np.sqrt(SPS))*( (np.sin(np.pi*n*(1-alpha)/SPS)) + \
+        (4*alpha*n/SPS)*(np.cos(np.pi*n*(1+alpha)/SPS)) ) /\
+        ( (np.pi*n/SPS) * (1 - (4*alpha*n/SPS)**2) )
+    return h
