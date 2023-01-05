@@ -11,6 +11,7 @@ import datetime
 import math
 import matplotlib.pyplot as plt
 from utm import from_latlon
+from digicomm import *
 
 GPS_LOCATIONS = {
     "cbrssdr1-browning-comp": (40.76627,-111.84774),
@@ -55,6 +56,12 @@ GPS_LOCATIONS = {
     "cnode-ebc-dd-b210": (40.76720,-111.83810),
 }
 
+gold_codes_dict = {
+    31:{0:np.array([1,1,0,0,0,1,1,0,0,1,0,1,0,0,0,1,1,1,1,0,0,0,1,0,0,0,1,1,1,1,1])},
+    63:{0:np.array([0,0,0,0,0,0,0,1,1,1,0,1,0,0,0,1,1,1,1,1,0,1,0,0,1,1,1,0,0,0,0,1,1,0,1,1,1,1,1,1,0,0,1,0,0,1,1,1,0,1,1,1,1,0,0,1,1,0,0,0,0,1,0])},
+    127:{0:np.array([0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,1,1,0,1,0,0,1,0,0,1,1,0,0,1,0,1,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1,1,1,1,0,0,1,0,0,0,1,1,1,1,0,1,1,1,0,0,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,0,0,0,1,1,1,1,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,1,0,1,1,1,1,0,1])},
+    }
+
 def calcDistLatLong(coord1, coord2):
     '''
     Calculate distance between two nodes using lat/lon coordinates
@@ -85,14 +92,12 @@ def get_time_string(timestamp):
     date_time = datetime.datetime.fromtimestamp(int(timestamp))
     return date_time.strftime("%m-%d-%Y, %H:%M:%S")
 
-def traverse_dataset(meas_folder, numrx, numnoise):
+def traverse_dataset(meas_folder):
     '''
     Load data from hdf5 format measurement file
     INPUT
     ----
         meas_folder: path to the measurement folder. Example: "SHOUT/Results/Shout_meas_01-04-2023_18-50-26"
-        numrx: number of repeating IQ sample collection w/ transmission. Usually get from the json file within the same folder
-        numnoise: number of repeating IQ sample collection w/o transmission. Usually get from the json file within the same folder
     OUTPUT
     ----
         data: Collected IQ samples w/ transmission. It is indexed by the transmitter name
@@ -130,8 +135,10 @@ def traverse_dataset(meas_folder, numrx, numnoise):
                         for rx in dataset[cmd][cmd_time][tx][rx_gain].keys():
                             print("         RX:", rx)
                             print("           Measurement items:", list(dataset[cmd][cmd_time][tx][rx_gain][rx].keys()))
-                            
-                            samplesNotx =  dataset[cmd][cmd_time][tx][rx_gain][rx]['rxsamples'][:numnoise, :]
+                            repeat = np.shape(dataset[cmd][cmd_time][tx][rx_gain][rx]['rxsamples'])[0]
+                            print("         repeat", repeat)
+
+                            samplesNotx =  dataset[cmd][cmd_time][tx][rx_gain][rx]['rxsamples'][:repeat, :]
                             namelist = rx.split('-')
                             noise[namelist[1]] = samplesNotx
                 else:
@@ -150,13 +157,16 @@ def traverse_dataset(meas_folder, numrx, numnoise):
 
                                 # peak avg check
                                 txrxloc.setdefault(tx, []).append(rx)
-                                rxsamples = dataset[cmd][cmd_time][tx][tx_gain][rx_gain][rx]['rxsamples'][:numrx, :]
+                                rxsamples = dataset[cmd][cmd_time][tx][tx_gain][rx_gain][rx]['rxsamples'][:repeat, :]
                                 data.setdefault(tx, []).append(np.array(rxsamples))
 
         else:                       
             print('Unsupported command: ', cmd)
 
     return data, noise, txrxloc
+
+def get_gold_code(nbits, code_id):
+    return gold_codes_dict[nbits][code_id]
 
 def JsonLoad(folder, json_file):
     '''
@@ -167,11 +177,11 @@ def JsonLoad(folder, json_file):
         json_file: the json file with all the specifications. Example: '/save_iq_w_tx_gold.json'
     OUTPUT
     ----
-        rxrepeat: number of repeating IQ sample collection w/ transmission. Used as an input to traverse_dataset() func
+        samps_per_chip: samples per chip
         wotxrepeat: number of repeating IQ sample collection w/o transmission. Used as an input to traverse_dataset() func
         rxrate: sampling rate at the receiver side
     '''
-    config_file = folder+json_file
+    config_file = folder+'/'+json_file
     config_dict = json.load(open(config_file))[0]
     nsamps = config_dict['nsamps']
     rxrate = config_dict['rxrate']
@@ -183,19 +193,22 @@ def JsonLoad(folder, json_file):
         samps_per_chip = 2
     else:
         samps_per_chip = config_dict['samps_per_chip']
+    gold_code = get_gold_code(gold_length, gold_id) * 2 - 1
+    long_gold_code = np.repeat(gold_code, samps_per_chip)
     rxrepeat = config_dict['rxrepeat']
 
-    return rxrepeat, wotxrepeat, rxrate
+    return samps_per_chip, wotxrepeat, rxrate, long_gold_code
 
 def main(folder):
     '''
     main function
     '''
     # load parameters from the json script
-    Rxrepeat, Wotxrepeat, samp_rate = JsonLoad(folder)
+    jsonfile = 'save_iq_w_tx_gold.json'
+    samps_per_chip, Wotxrepeat, samp_rate, goldcode = JsonLoad(folder, jsonfile)
 
     # load data
-    rx_data, _, txrxloc = traverse_dataset(folder, Rxrepeat, Wotxrepeat)
+    rx_data, _, txrxloc = traverse_dataset(folder)
 
     for txloc in rx_data:
         # check one specific transmitter
@@ -206,21 +219,35 @@ def main(folder):
         
         # measurements vs. distance
         plt.figure()
-        arrRX = []
-        dis = []
-        namelist = []
         for j, rxloc in enumerate(txrxloc[txloc]):
             # check one specific receiver
-            if rxloc != 'cbrssdr1-ustar-comp':continue
+            # if rxloc != 'cbrssdr1-ustar-comp':continue
             print('RX: {}'.format(rxloc))
 
-            namelist.append(rxloc.split('-'))
-            dis.append(calcDistLatLong(GPS_LOCATIONS[txloc], GPS_LOCATIONS[rxloc]))
-            # custom processing implemented here
-            power = 10.0 * np.log10(np.sum(np.abs(rx_data[txloc][j,:])**2))
-            arrRX.append(np.median(power))
+            namelist = (rxloc.split('-'))
+            print('namelist',namelist)
+            dis = (calcDistLatLong(GPS_LOCATIONS[txloc], GPS_LOCATIONS[rxloc]))
+            
+            # Example: DSSS sequence correlation
+            # matched filtering
+            pulse = SRRC(0.5, samps_per_chip, 5)
+            MFsamp = signal.lfilter(pulse, 1, rx_data[txloc][j,:].real) + 1j* \
+                     signal.lfilter(pulse, 1, rx_data[txloc][j,:].imag)
+            # Despread with gold code
+            correlation = signal.correlate(MFsamp, goldcode)[len(goldcode)//2-1:-(len(goldcode)//2)]
 
-        plt.plot(dis, 10*np.log10(arrRX),'o',label='RX: '+namelist[1])
+            # Symbol Samples 
+            corr_abs = abs(correlation)
+            height = (np.mean(corr_abs)+corr_abs.max())/2
+            idx = signal.find_peaks(corr_abs, distance=len(goldcode)-4, height=height)[0] 
+            yhat = correlation[idx]
+
+            # custom processing functions implemented here
+
+            power = np.mean(10.0 * np.log10(np.abs(yhat)**2))
+            arrRX = (power)
+
+            plt.plot(dis, arrRX,'o',label='RX: '+namelist[1])
         plt.xlabel('Distance (m)',fontsize=15)
         plt.ylabel('RSSI (dB)',fontsize=15)
         plt.legend(ncol=2)
@@ -228,5 +255,5 @@ def main(folder):
         plt.show()
 
 if __name__=="__main__":
-    temp_folder = "BS/Shout_meas_01-04-2023_18-50-26" 
+    temp_folder = "BS/Shout_meas_12-30-2022_00-19-23" 
     main(temp_folder)
