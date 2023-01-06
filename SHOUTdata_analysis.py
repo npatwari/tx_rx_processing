@@ -199,7 +199,7 @@ def JsonLoad(folder, json_file):
 
     return samps_per_chip, wotxrepeat, rxrate, long_gold_code
 
-def main(folder):
+def main(folder, method='peak_find'):
     '''
     main function
     '''
@@ -212,7 +212,7 @@ def main(folder):
 
     for txloc in rx_data:
         # check one specific transmitter
-        if txloc != 'cbrssdr1-honors-comp':continue
+        if txloc != 'cbrssdr1-ustar-comp':continue
         print('\n\n\nTX: {}'.format(txloc))
         rx_data[txloc] = np.vstack(rx_data[txloc])
         print('[Debug] data shape', np.shape(rx_data[txloc]))
@@ -233,27 +233,57 @@ def main(folder):
             pulse = SRRC(0.5, samps_per_chip, 5)
             MFsamp = signal.lfilter(pulse, 1, rx_data[txloc][j,:].real) + 1j* \
                      signal.lfilter(pulse, 1, rx_data[txloc][j,:].imag)
-            # Despread with gold code
-            correlation = signal.correlate(MFsamp, goldcode)[len(goldcode)//2-1:-(len(goldcode)//2)]
 
-            # Symbol Samples 
-            corr_abs = abs(correlation)
-            height = (np.mean(corr_abs)+corr_abs.max())/2
-            idx = signal.find_peaks(corr_abs, distance=len(goldcode)-4, height=height)[0] 
-            yhat = correlation[idx]
+            # Coarse Frequency Offset Sync
+            FreqsyncSamp = Freq_Offset_Correction(MFsamp, samp_rate, order=2, debug=False)
+
+            # Fine Freq Synchronization
+            FreqsyncSamp1, a_hat, e_phi, theta_h = DD_carrier_sync(FreqsyncSamp, 2, 0.02, zeta=0.707)
+
+            # Despread with gold code
+            correlation = signal.correlate(FreqsyncSamp1, goldcode)[len(goldcode)//2-1:-(len(goldcode)//2)]
+
+            if method=='peak_find':
+                # Symbol Samples: method 1
+                corr_abs = abs(correlation)
+                height = (np.mean(corr_abs)+corr_abs.max())/2
+                idx = signal.find_peaks(corr_abs, distance=len(goldcode)-4, height=height)[0] 
+                yhat = correlation[idx]
+                print('detected data bits', (yhat.real>0).astype(int))
+            elif method=='simple':
+                # Symbol Samples: method 2
+                corr_abs = abs(correlation)
+                ind = np.argmax(corr_abs[:int(len(goldcode)*1.5)])
+                yhat = correlation[ind::len(goldcode)]
+                print('detected data bits', (yhat.real>0).astype(int))
 
             # custom processing functions implemented here
 
-            power = np.mean(10.0 * np.log10(np.abs(yhat)**2))
+            power = np.mean(10.0 * np.log10(np.abs(yhat)**2)) #np.mean(np.abs(yhat)) #
             arrRX = (power)
+            
+            # plt.figure()
+            # plt.plot(correlation.real, '-o',label='real')
+            # plt.plot(correlation.imag, '-+',label='imaginary')
+            # if method=='peak_find':
+            #     plt.plot(idx, (yhat).real, 'o', label='DSSS peaks')
+            # elif method=='simple':
+            #     plt.plot(np.arange(len(yhat))*len(goldcode)+ind, yhat.real, 'o', label='DSSS peaks')
+            # plt.xlabel('Sample',fontsize=15)
+            # plt.ylabel('correlation',fontsize=15)
+            # plt.title('TX: {} RX: {}'.format(txloc, namelist[1]))
+            # plt.legend()
+            # plt.tight_layout()
+            # plt.show()
 
             plt.plot(dis, arrRX,'o',label='RX: '+namelist[1])
         plt.xlabel('Distance (m)',fontsize=15)
         plt.ylabel('RSSI (dB)',fontsize=15)
         plt.legend(ncol=2)
         plt.title('TX: {}'.format(txloc),fontsize=15)
+        plt.tight_layout()
         plt.show()
 
 if __name__=="__main__":
-    temp_folder = "BS/Shout_meas_12-30-2022_00-19-23" 
-    main(temp_folder)
+    temp_folder = "BS/Shout_meas_01-05-2023_10-45-52" 
+    main(temp_folder, method='simple')
