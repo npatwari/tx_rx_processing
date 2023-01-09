@@ -45,7 +45,7 @@ def Mod_TX():
     return QPSK_signal
 def main():
 
-    signal = Mod_TX(2)
+    signal = Mod_TX()
     
     args = parse_args()
     usrp = uhd.usrp.MultiUSRP(args.args)
