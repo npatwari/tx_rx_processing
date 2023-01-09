@@ -49,10 +49,8 @@ def binary2mary(data, M):
     for each in data:
         newdata.append(int(each))
     newdata = np.array(newdata)
-    temp = np.reshape(newdata, (log2M, int(length/log2M)))
-    print(temp.shape)
+    temp = np.reshape(newdata, (int(length/log2M), log2M))
     temp = np.transpose(temp)
-    print(temp)
     marydata = temp.dot(binvalues)
     marydata = np.transpose(marydata)
     print(marydata)
