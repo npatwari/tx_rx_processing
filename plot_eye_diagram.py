@@ -6,7 +6,13 @@
 #           at sample y_s[0].  If not, you must send in an offset integer.
 #   offset: the number of samples at the start of y_s to ignore
 #
-# OUTPUTS:  h, the handle to the lines plotted
+# OUTPUTS:  none
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.rc('xtick', labelsize=16) 
+matplotlib.rc('ytick', labelsize=16) 
 
 
 def plot_eye_diagram(y_s, N, offset=0)
@@ -18,6 +24,8 @@ def plot_eye_diagram(y_s, N, offset=0)
     for i, start_i in enumerate(start_indices):
         plt.plot(time_vals, y_s[start_i:(start_i+N+1)], 'b-', linewidth=2)
         
-    plt.xlabel('Time t/T_s_y', fontsize=16)
-    plt.ylabel('M.F. Output', fontsize=16)
+    plt.xlabel(r'Time $t/T_s$', fontsize=16)
+    plt.xlim([-0.5, 0.5])
+    plt.ylabel('Matched Filter Output', fontsize=16)
+    plt.grid(True)
     plt.show()
