@@ -18,7 +18,7 @@ def parse_args():
 
 def Mod_TX():
     M = 2 # bits per symbol (i.e. 2 in QPSK modulation)
-    Information_to_transmit = "Mobile Wireless Week 2023"
+    Information_to_transmit = "Mobile Wireless Week 2023" 
     binary = ''.join(format(ord(i), '08b') for i in Information_to_transmit)
     data_bits = np.zeros((len(binary),))
     for i in range(len(binary)):
@@ -43,6 +43,7 @@ def Mod_TX():
     QPSK_signal = Mapping(parallel_bits)
 
     return QPSK_signal
+
 def main():
 
     signal = Mod_TX()
@@ -54,14 +55,5 @@ def main():
         
     usrp.send_waveform(signal, args.duration, args.freq, args.rate,
                        args.channels, args.gain)
-    """
-    tb = usrp.send_waveform(signal, args.duration, args.freq, args.rate,
-                       args.channels, args.gain)
-    
-    try:
-        tb.run()
-    except KeyboardInterrupt:
-        pass
-    """
 if __name__ == "__main__":
     main()
