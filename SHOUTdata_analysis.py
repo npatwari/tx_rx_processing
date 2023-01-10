@@ -228,6 +228,10 @@ def main(folder, method='peak_find'):
             print('namelist',namelist)
             dis = (calcDistLatLong(GPS_LOCATIONS[txloc], GPS_LOCATIONS[rxloc]))
             
+            # custom processing functions implemented here
+
+
+            
             # Example: DSSS sequence correlation
             # matched filtering
             pulse = SRRC(0.5, samps_per_chip, 5)
@@ -256,8 +260,6 @@ def main(folder, method='peak_find'):
                 ind = np.argmax(corr_abs[:int(len(goldcode)*1.5)])
                 yhat = correlation[ind::len(goldcode)]
                 print('detected data bits', (yhat.real>0).astype(int))
-
-            # custom processing functions implemented here
 
             power = np.mean(10.0 * np.log10(np.abs(yhat)**2)) #np.mean(np.abs(yhat)) #
             arrRX = (power)

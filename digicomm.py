@@ -255,3 +255,30 @@ def Freq_Offset_Correction(samples, fs, order=2, debug=False):
         plt.show()
 
     return corrsamp
+
+def write_complex_binary(data, filename):
+    '''
+    Open filename and write array to it as binary
+    Format is interleaved float IQ e.g. each I,Q should be 32-bit float 
+    INPUT
+    ----
+    data:     data to be wrote into the file. format: (length, )
+    filename: file name
+    '''
+
+    re = np.real(data)
+    im = np.imag(data)
+    binary = np.zeros(len(data)*2, dtype=np.float32)
+    binary[::2] = re
+    binary[1::2] = im
+    binary.tofile(filename)
+
+def _get_samps_frm_file(filename): 
+    '''
+    load samples from the binary file
+    '''
+    # File should be in GNURadio's format, i.e., interleaved I/Q samples as float32
+    samples = np.fromfile(filename, dtype=np.float32)
+    samps = (samples[::2] + 1j*samples[1::2]).astype((np.complex64)) # convert to IQIQIQ
+        
+    return samps
