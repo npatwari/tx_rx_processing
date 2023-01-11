@@ -294,8 +294,8 @@ if 1:
     pulse = SRRC(alpha, N, Lp)
     pulse = np.array(pulse)
     pulse = np.reshape(pulse, pulse.size)
-    #x_s_I = np.reshape(x_s_I, x_s_I.size)
-    #x_s_Q = np.reshape(x_s_Q, x_s_Q.size)
+    x_s_I = np.reshape(x_s_I, x_s_I.size)
+    x_s_Q = np.reshape(x_s_Q, x_s_Q.size)
     s_0_I = np.convolve(x_s_I, pulse, mode='full')
     s_0_Q = np.convolve(x_s_Q, pulse, mode='full')
     
@@ -308,7 +308,7 @@ if 1:
     #    n = list(range(0, len(s_0_I)))
     s = s_0_I + 1j*s_0_Q
 
-    write_complex_binary(s, 'QPSK_signal.iq')
+    write_complex_binary(s, 'QPSK_signal2.iq')
 
     # for each in n:
     #     val1 = math.sqrt(2) * s_0_I[each] * math.cos(2 * math.pi * f_0 * each)
