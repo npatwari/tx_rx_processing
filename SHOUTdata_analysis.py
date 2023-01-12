@@ -156,7 +156,7 @@ def traverse_dataset(meas_folder):
                                 print("         repeat", repeat)
 
                                 # peak avg check
-                                txrxloc.setdefault(tx, []).append(rx)
+                                txrxloc.setdefault(tx, []).append([rx]*repeat)
                                 rxsamples = dataset[cmd][cmd_time][tx][tx_gain][rx_gain][rx]['rxsamples'][:repeat, :]
                                 data.setdefault(tx, []).append(np.array(rxsamples))
 
@@ -186,106 +186,128 @@ def JsonLoad(folder, json_file):
     nsamps = config_dict['nsamps']
     rxrate = config_dict['rxrate']
     rxfreq = config_dict['rxfreq']
-    gold_id = config_dict['gold_id']
+    # gold_id = config_dict['gold_id']
     wotxrepeat = config_dict['wotxrepeat']
-    gold_length = config_dict['gold_length']
-    if 'samps_per_chip' not in config_dict:
-        samps_per_chip = 2
-    else:
-        samps_per_chip = config_dict['samps_per_chip']
-    gold_code = get_gold_code(gold_length, gold_id) * 2 - 1
-    long_gold_code = np.repeat(gold_code, samps_per_chip)
+    # gold_length = config_dict['gold_length']
+    # if 'samps_per_chip' not in config_dict:
+    #     samps_per_chip = 2
+    # else:
+    #     samps_per_chip = config_dict['samps_per_chip']
+    # gold_code = get_gold_code(gold_length, gold_id) * 2 - 1
+    # long_gold_code = np.repeat(gold_code, samps_per_chip)
     rxrepeat = config_dict['rxrepeat']
 
-    return samps_per_chip, wotxrepeat, rxrate, long_gold_code
+    return rxrepeat, rxrate
 
 def main(folder, method='peak_find'):
     '''
     main function
     '''
     # load parameters from the json script
-    jsonfile = 'save_iq_w_tx_gold.json'
-    samps_per_chip, Wotxrepeat, samp_rate, goldcode = JsonLoad(folder, jsonfile)
+    jsonfile = 'save_iq_w_tx_file.json'
+    rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 
     # load data
     rx_data, _, txrxloc = traverse_dataset(folder)
 
     for txloc in rx_data:
         # check one specific transmitter
-        if txloc != 'cbrssdr1-ustar-comp':continue
+        # if txloc != 'cbrssdr1-hospital-comp':continue
         print('\n\n\nTX: {}'.format(txloc))
         rx_data[txloc] = np.vstack(rx_data[txloc])
         print('[Debug] data shape', np.shape(rx_data[txloc]))
+        txrxloc[txloc] = np.vstack(txrxloc[txloc]).flatten()
+        # print('txrxloc[txloc]', txrxloc[txloc])
         
         # measurements vs. distance
-        plt.figure()
-        for j, rxloc in enumerate(txrxloc[txloc]):
+        # plt.figure()
+        for j, rxloc in enumerate(txrxloc[txloc][::rxrepeat]):
             # check one specific receiver
-            # if rxloc != 'cbrssdr1-ustar-comp':continue
+            # if rxloc != 'cnode-wasatch-dd-b210':continue
             print('RX: {}'.format(rxloc))
 
             namelist = (rxloc.split('-'))
-            print('namelist',namelist)
+            TXnamelist = (txloc.split('-'))
             dis = (calcDistLatLong(GPS_LOCATIONS[txloc], GPS_LOCATIONS[rxloc]))
+
             
             # custom processing functions implemented here
+            plt.figure(figsize=(5,4))
+            plt.plot(np.abs(rx_data[txloc][j,:]))
+            plt.title('TX: {} RX: {}'.format(TXnamelist[1], namelist[1]))
+            plt.ylabel('ampltiude')
+            plt.xlabel('Sample Index')
+            plt.tight_layout()
 
+            plt.figure(figsize=(5,4))
+            plt.plot(np.angle(rx_data[txloc][j,:]))
+            plt.ylabel('angle')
+            plt.xlabel('Sample Index')
+            plt.title('TX: {} RX: {}'.format(TXnamelist[1], namelist[1]))
+            plt.tight_layout()
+
+            plt.figure(figsize=(5,4))
+            plt.psd(rx_data[txloc][j,:], Fs = 240)
+            plt.title('TX: {} RX: {}'.format(TXnamelist[1], namelist[1]))
+            plt.xlabel('Frequency (KHz)')
+            plt.tight_layout()
+            plt.show()
 
             
-            # Example: DSSS sequence correlation
-            # matched filtering
-            pulse = SRRC(0.5, samps_per_chip, 5)
-            MFsamp = signal.lfilter(pulse, 1, rx_data[txloc][j,:].real) + 1j* \
-                     signal.lfilter(pulse, 1, rx_data[txloc][j,:].imag)
+            # # Example: DSSS sequence correlation
+            # # matched filtering
+            # pulse = SRRC(0.5, 8, 5)
+            # MFsamp = signal.lfilter(pulse, 1, rx_data[txloc][j,:].real) + 1j* \
+            #          signal.lfilter(pulse, 1, rx_data[txloc][j,:].imag)
 
-            # Coarse Frequency Offset Sync
-            FreqsyncSamp = Freq_Offset_Correction(MFsamp, samp_rate, order=2, debug=False)
+        #     # Coarse Frequency Offset Sync
+        #     FreqsyncSamp = Freq_Offset_Correction(MFsamp, samp_rate, order=2, debug=False)
 
-            # Fine Freq Synchronization
-            FreqsyncSamp1, a_hat, e_phi, theta_h = DD_carrier_sync(FreqsyncSamp, 2, 0.02, zeta=0.707)
+        #     # Fine Freq Synchronization
+        #     FreqsyncSamp1, a_hat, e_phi, theta_h = DD_carrier_sync(FreqsyncSamp, 2, 0.02, zeta=0.707)
 
-            # Despread with gold code
-            correlation = signal.correlate(FreqsyncSamp1, goldcode)[len(goldcode)//2-1:-(len(goldcode)//2)]
+        #     # Despread with gold code
+        #     correlation = signal.correlate(FreqsyncSamp1, goldcode)[len(goldcode)//2-1:-(len(goldcode)//2)]
 
-            if method=='peak_find':
-                # Symbol Samples: method 1
-                corr_abs = abs(correlation)
-                height = (np.mean(corr_abs)+corr_abs.max())/2
-                idx = signal.find_peaks(corr_abs, distance=len(goldcode)-4, height=height)[0] 
-                yhat = correlation[idx]
-                print('detected data bits', (yhat.real>0).astype(int))
-            elif method=='simple':
-                # Symbol Samples: method 2
-                corr_abs = abs(correlation)
-                ind = np.argmax(corr_abs[:int(len(goldcode)*1.5)])
-                yhat = correlation[ind::len(goldcode)]
-                print('detected data bits', (yhat.real>0).astype(int))
+        #     if method=='peak_find':
+        #         # Symbol Samples: method 1
+        #         corr_abs = abs(correlation)
+        #         height = (np.mean(corr_abs)+corr_abs.max())/2
+        #         idx = signal.find_peaks(corr_abs, distance=len(goldcode)-4, height=height)[0] 
+        #         yhat = correlation[idx]
+        #         print('detected data bits', (yhat.real>0).astype(int))
+        #     elif method=='simple':
+        #         # Symbol Samples: method 2
+        #         corr_abs = abs(correlation)
+        #         ind = np.argmax(corr_abs[:int(len(goldcode)*1.5)])
+        #         yhat = correlation[ind::len(goldcode)]
+        #         print('detected data bits', (yhat.real>0).astype(int))
 
-            power = np.mean(10.0 * np.log10(np.abs(yhat)**2)) #np.mean(np.abs(yhat)) #
-            arrRX = (power)
+        #     power = np.mean(10.0 * np.log10(np.abs(yhat)**2)) #np.mean(np.abs(yhat)) #
+        #     arrRX = (power)
             
-            # plt.figure()
-            # plt.plot(correlation.real, '-o',label='real')
-            # plt.plot(correlation.imag, '-+',label='imaginary')
-            # if method=='peak_find':
-            #     plt.plot(idx, (yhat).real, 'o', label='DSSS peaks')
-            # elif method=='simple':
-            #     plt.plot(np.arange(len(yhat))*len(goldcode)+ind, yhat.real, 'o', label='DSSS peaks')
-            # plt.xlabel('Sample',fontsize=15)
-            # plt.ylabel('correlation',fontsize=15)
-            # plt.title('TX: {} RX: {}'.format(txloc, namelist[1]))
-            # plt.legend()
-            # plt.tight_layout()
-            # plt.show()
+        #     # plt.figure()
+        #     # plt.plot(correlation.real, '-o',label='real')
+        #     # plt.plot(correlation.imag, '-+',label='imaginary')
+        #     # if method=='peak_find':
+        #     #     plt.plot(idx, (yhat).real, 'o', label='DSSS peaks')
+        #     # elif method=='simple':
+        #     #     plt.plot(np.arange(len(yhat))*len(goldcode)+ind, yhat.real, 'o', label='DSSS peaks')
+        #     # plt.xlabel('Sample',fontsize=15)
+        #     # plt.ylabel('correlation',fontsize=15)
+        #     # plt.title('TX: {} RX: {}'.format(txloc, namelist[1]))
+        #     # plt.legend()
+        #     # plt.tight_layout()
+        #     # plt.show()
 
-            plt.plot(dis, arrRX,'o',label='RX: '+namelist[1])
-        plt.xlabel('Distance (m)',fontsize=15)
-        plt.ylabel('RSSI (dB)',fontsize=15)
-        plt.legend(ncol=2)
-        plt.title('TX: {}'.format(txloc),fontsize=15)
-        plt.tight_layout()
-        plt.show()
+        #     plt.plot(dis, arrRX,'o',label='RX: '+namelist[1])
+        # plt.xlabel('Distance (m)',fontsize=15)
+        # plt.ylabel('RSSI (dB)',fontsize=15)
+        # plt.legend(ncol=2)
+        # plt.title('TX: {}'.format(txloc),fontsize=15)
+        # plt.tight_layout()
+        # plt.show()
 
 if __name__=="__main__":
-    temp_folder = "BS/Shout_meas_01-05-2023_10-45-52" 
+    temp_folder = "Shout_meas_01-11-2023_22-44-37" 
     main(temp_folder, method='simple')
