@@ -405,21 +405,65 @@ def plot_eye_diagram(y_s, N, offset=0):
 #          and possible signal space complex values. 
 # OUTPUT:  m-ary symbol indices in 0...length(outputVec)-1
 def findClosestComplex(r_hat, outputVec):
-    data_out = np.array([np.argmin(np.abs(r-outputVec)) for r in r_hat])
+    data_out = [np.argmin(np.abs(r-outputVec)) for r in r_hat]
     return data_out
 
-def plot_constellation_diagram(rx4):
+# PURPOSE: Convert a text string to a stream of 1/0 bits.
+# INPUT: string message
+# OUTPUT: vector of 1's and 0's.
+def text2bits(message):
+    # Convert to characters of '1' and '0' in a vector.
+    temp_message = []
+    final_message = []
+    for each in message:
+        temp_message.append(format(ord(each), '07b'))
+    for every in temp_message:
+        for digit in every:
+            final_message.append(int(digit))
+    return final_message
+
+
+# PURPOSE: Plot the signal symbol samples on a complex plane
+# INPUT:   Received complex values (output of matched filter downsampled)
+# OUTPUT:  none
+def constellation_plot(rx4):
 
     plt.figure(figsize=(5,5))
     ax = plt.gca() 
-    ax.set_aspect(1.0) 
-    plt.plot(np.real(rx4), np.imag(rx4),'ro', label='RX Signal')
+    ax.set_aspect(1.0) # Make it a square 1x1 ratio plot
+    plt.plot(np.real(rx4), np.imag(rx4),'ro')
     plt.ylabel('Imag(Symbol Sample)', fontsize=14)
     plt.xlabel('Real(Symbol Sample)', fontsize=14)
     plt.grid('on')
     plt.tight_layout()
 
 
+# Find the sync word in the vector of all bit decisions, and flip all bits if 
+# The synch word is negated.
+def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
+
+    # The preamble is 64 bits, the sync word is 16 bits.  So it should be in the first
+    # 100 or so bits.  If you search all bits, you may find some bit string close enough
+    # to the sync word by chance in the data bits, so dont search all bit decisions.
+    maxToSearch = 100 
+    lagsSynch   = signal.correlation_lags(maxToSearch, len(syncWord))
+    temp        = signal.correlate(2*bits_out[:100]-1, 2*syncWord-1)
+    maxIndexSync = np.argmax(np.abs(temp))
+    maxSync     = temp[maxIndexSync]
+    # We never did phase synchronization. 
+    # A 180 degree phase error would result in all bits being negated.
+    if maxSync < 0:   
+        final_bits_out = 1 - bits_out
+    else:
+        final_bits_out = bits_out
+
+    dataBitsStartIndex = lagsSynch[maxIndexSync] + len(syncWord)
+    if dataBitsStartIndex+numDataBits < len(final_bits_out):
+        data_bits = final_bits_out[dataBitsStartIndex:(dataBitsStartIndex+numDataBits)]
+    else:
+        data_bits = final_bits_out[dataBitsStartIndex:]
+        print("Error: The packet extended beyond the end of the sample file.")
+    return data_bits
 
 
 # MAIN
@@ -474,31 +518,42 @@ plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
 # INPUT: Synched matched filter output
 # OUTPUT: Symbol Samples (at n*T_sy)
 rx3 = rx2[preambleStart::N]
+rx3 = rx3 / np.median(np.abs(rx3))  # "AGC" to make symbol values close to +/- 1
 
 # Ignore initial samples that are very close to the origin, compared to later samples.
-rx3 = rx3 / np.median(np.abs(rx3))  # "AGC" to make symbol values close to +/- 1
-magThreshold = 0.2
-startsymbol = np.where(np.abs(rx3)>magThreshold)[0][0]
+startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
 rx4 = rx3[startsymbol:]
 
 # Plot a constellation diagram
-plot_constellation_diagram(rx4)
+constellation_plot(rx4)
 
 ###########################################
 # Symbol Decisions
 # INPUT: Symbol Samples
 # OUTPUT: Bits
 outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
-mary_out  = findClosestComplex(r_hat, outputVec)
-bits_out  = mary2binary(mary_out, 4)
+mary_out  = findClosestComplex(rx4, outputVec)
+bits_out  = mary2binary(mary_out, 4)[0]
+
+###########################################
+# Sync Word Discovery and Data Bits Extraction
+# INPUT: Bit estimates from the received signal. 
+#        Must have sync word used at the transmitter.
+# OUTPUT: Bits from the data (the actual message)
+
+# You have to know these things about the packet you are receiving
+syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
+actualMsg   = 'I worked all semester on digital communications and all I got was this sequence of ones and zeros.'
+messageBits = np.array(text2bits(actualMsg))
+# Find the sync word in the vector of all bit decisions, and flip all bits if 
+# The synch word is negated.
+data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
 
 
 ###########################################
-# Sync Word Discovery
-# INPUT: Bit estimates from the received signal. 
-#        Must have sync word used at the transmitter.
-# OUTPUT: Bits from the data
-
-# You have to know these things about the packet you are receiving
-sync         = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
-numDataBits  = 686  
+# Count the bit errors in the message
+# INPUT: estimated bits, actual bits
+# OUTPUT: Bit error rate
+errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
+error_rate = errors/len(data_bits)
+print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
