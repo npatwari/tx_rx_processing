@@ -246,13 +246,14 @@ def binvector2str(binvector):
 
 if 1:
     temp         =  'I worked all semester on digital communications and all I got was this sequence of ones and zeros.'
-    messagebits  = np.array(text2bits(temp))
+    messagebits  = np.array(text2bits(temp))    
     preamble     = np.tile([1, 1, 0, 0], 16)
     sync         = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
 
     data_bits    = np.concatenate((preamble, sync, messagebits))
     print('Message Sent: ')
     print(temp)
+    print('Number of data bits: ' + str(len(messagebits)))
 
     ###########################################
     ### Signal Generation
