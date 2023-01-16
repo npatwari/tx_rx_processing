@@ -1,0 +1,28 @@
+[
+ {
+    "cmd": "save_iq_w_tx",
+    "sync": true,
+    "timeout": 30,
+
+    "nsamps": 4096,
+
+    "wotxrepeat": 0,
+    
+    "txrate": 240e3,
+    "txfreq": 3455e6,
+    "txgain": {"fixed": 28.0},
+    "txsamps": {"file": "/users/wjcqmz/QPSK_signal2.iq"},
+    "txwait": 2,
+    "use_lo_offset": true,
+
+    "rxrate": 240e3,
+    "rxfreq": 3455e6,
+    "rxgain": {"fixed": 70.0},
+    "rxrepeat": 4,
+    "return_iq": true,
+    "rxwait": {"min": 50, "max": 2000, "res": "ms"},
+
+    "txclients": ["cbrssdr1-hospital-comp","cbrssdr1-honors-comp","cbrssdr1-smt-comp","cbrssdr1-ustar-comp"],
+    "rxclients": ["cnode-wasatch-dd-b210", "cnode-moran-dd-b210"]
+ }
+]

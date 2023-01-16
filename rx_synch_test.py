@@ -470,7 +470,7 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
 plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-11-2023_21-06-07" 
+folder = "Shout_meas/Shout_meas_01-11-2023_22-15-19" 
 jsonfile = 'save_iq_w_tx_file.json'
 rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 
