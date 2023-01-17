@@ -22,7 +22,7 @@
     "return_iq": true,
     "rxwait": {"min": 50, "max": 2000, "res": "ms"},
 
-    "txclients": ["cbrssdr1-hospital-comp","cbrssdr1-honors-comp","cbrssdr1-smt-comp","cbrssdr1-ustar-comp"],
+    "txclients": ["cbrssdr1-hospital-comp","cbrssdr1-honors-comp","cbrssdr1-smt-comp","cbrssdr1-browning-comp","cbrssdr1-bes-comp","cbrssdr1-fm-comp"],
     "rxclients": ["cnode-wasatch-dd-b210", "cnode-moran-dd-b210"]
  }
 ]
