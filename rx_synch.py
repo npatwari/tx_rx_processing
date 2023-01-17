@@ -450,6 +450,7 @@ def text2bits(message):
 # OUTPUT:  none
 def constellation_plot(rx4):
 
+    # I like a square plot for the constellation so that both dimensions look equal
     plt.figure(figsize=(5,5))
     ax = plt.gca() 
     ax.set_aspect(1.0) # Make it a square 1x1 ratio plot
@@ -469,6 +470,7 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
     # to the sync word by chance in the data bits, so dont search all bit decisions.
     maxToSearch = 100 
     lagsSynch   = signal.correlation_lags(maxToSearch, len(syncWord))
+    # The "2*x-1" converts from a (0,1) bit to a (-1,1) representation
     temp        = signal.correlate(2*bits_out[:100]-1, 2*syncWord-1)
     maxIndexSync = np.argmax(np.abs(temp))
     maxSync     = temp[maxIndexSync]
@@ -567,7 +569,7 @@ bits_out  = mary2binary(mary_out, 4)[0]
 
 # You have to know these things about the packet you are receiving
 syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
-actualMsg   = 'I worked all semester on digital communications and all I got was this sequence of ones and zeros.'
+actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
 messageBits = np.array(text2bits(actualMsg))
 # Find the sync word in the vector of all bit decisions, and flip all bits if 
 # The synch word is negated.
