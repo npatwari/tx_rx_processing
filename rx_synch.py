@@ -314,9 +314,14 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
 
     # Estimate a frequency offset using the known preamble signal
     #f_hat  = estimateFrequencyOffset(x0, preambleSignal, lagIndex)
-    rx0_part = np.conjugate(rx0[lagIndex:(lagIndex + len(preambleSignal))])
-    N        = len(preambleSignal)
-    prod_rx0_preamble = rx0_part*preambleSignal
+    discardSamples = 60
+    if len(preambleSignal) < 200:
+        print("estimateFrequencyOffset: Error in Preamble Signal Length")
+    middle_of_preamble = preambleSignal[discardSamples:-discardSamples]
+    N        = len(middle_of_preamble)
+    startInd = max(0, lagIndex+discardSamples)
+    rx0_part = np.conjugate(rx0[startInd:(startInd + N)])
+    prod_rx0_preamble = rx0_part*middle_of_preamble
 
     # Frequencies at which freq content is calc'ed.
     # We'll multiply the generated matrix by the data to calculate PSD
@@ -327,12 +332,23 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
     # be conservative and make it larger, no problem.  We want to get the offset
     # down to at most 5 Hz b/c the packet duration is about 20 ms, so that would
     # keep the drift to about 1/10 of a rotation over the whole packet.
-    maxFreqOffset   = 0.01000
-    deltaFreqOffset = 0.00002
+    maxFreqOffset   = 0.010000
+    deltaFreqOffset = 0.000005
     freqRange    = np.arange(-maxFreqOffset, maxFreqOffset, deltaFreqOffset)
     temp         = (-1j*2*np.pi) * freqRange
-    expMat       = np.transpose(np.array([np.exp(temp*i) for i in np.arange(N)]))
+    expMat       = np.transpose(np.array([np.exp(temp*i) for i in np.arange(0,N)]))
+    print(expMat.size)
+    print(N)
+    print(len(prod_rx0_preamble))
     PSD_prod     = np.abs(expMat.dot(prod_rx0_preamble))**2
+
+    plt.figure()
+    plt.plot(240000.0*freqRange,PSD_prod,'r.')
+    plt.grid('on')
+    plt.xlabel('Frequency Offset')
+    plt.ylabel('sqrt PSD')
+    plt.show()
+
     maxIndexPSD  = np.argmax(PSD_prod)
     maxIndexFreq = freqRange[maxIndexPSD]
 
@@ -370,10 +386,13 @@ def crossCorrelationMax(rx0, preambleSignal):
 
     # Plot the selected signal.
     plt.figure()
-    plt.plot(np.imag(rx0), label='RX Signal')
-    plt.plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
-    plt.legend()
-    plt.ylabel('Real Signal Value', fontsize=14)
+    fig, subfigs = plt.subplots(2,1)
+
+    subfigs[0].plot(np.real(rx0), label='Real RX Signal')
+    subfigs[0].plot(np.imag(rx0), label='Imag RX Signal')
+    subfigs[0].plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
+    subfigs[0].legend()
+    subfigs[1].plot(lags, xcorr_mag, label='|X-Correlation|')
     plt.xlabel('Sample Index', fontsize=14)
     plt.tight_layout()
 
@@ -470,7 +489,7 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
 plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-11-2023_21-06-07" 
+folder = "Shout_meas/Shout_meas_01-11-2023_22-15-19"
 jsonfile = 'save_iq_w_tx_file.json'
 rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 
@@ -483,7 +502,7 @@ rxloc = 'cbrssdr1-honors-comp'
 
 # The dictionary element is a list with one element.
 # Then, there are multiple received signals, pick one
-rx0 = rx_data[txloc][0][1]   
+rx0 = rx_data[txloc][0][2]
 
 
 #### Synchronization
@@ -493,13 +512,15 @@ alpha     = 0.5 # SRRC rolloff factor
 Lp        = 6   # Number of symbol durations on each side of peak of SRRC pulse
 preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
 lagIndex = crossCorrelationMax(rx0, preambleSignal)
+
 rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
 
 # Plot the frequency corrected signal
 plt.figure()
-plt.plot(np.imag(rx1), label='RX Signal')
-plt.title('TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
-plt.ylabel('Imag', fontsize=14)
+plt.plot(np.real(rx1), label='Real RX Signal')
+plt.plot(np.imag(rx1), label='Imag RX Signal')
+plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+plt.ylabel('Signal Value', fontsize=14)
 plt.xlabel('Sample Index', fontsize=14)
 plt.tight_layout()
 
