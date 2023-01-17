@@ -313,10 +313,13 @@ def plotAllLinks(rx_data, txrxloc):
 def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
 
     # Estimate a frequency offset using the known preamble signal
-    #f_hat  = estimateFrequencyOffset(x0, preambleSignal, lagIndex)
-    discardSamples = 60
     if len(preambleSignal) < 200:
         print("estimateFrequencyOffset: Error in Preamble Signal Length")
+
+    # if you don't discard the start and end of the preamble signal, it
+    # can overlap with the synch word at its tail end, and this will
+    # cause some errors in the frequency estimate.
+    discardSamples = 60
     middle_of_preamble = preambleSignal[discardSamples:-discardSamples]
     N        = len(middle_of_preamble)
     startInd = max(0, lagIndex+discardSamples)
