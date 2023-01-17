@@ -427,6 +427,9 @@ def plot_eye_diagram(y_s, N, offset=0):
 #          and possible signal space complex values. 
 # OUTPUT:  m-ary symbol indices in 0...length(outputVec)-1
 def findClosestComplex(r_hat, outputVec):
+    # outputVec is a 4-length vector for QPSK, would be M for M-QAM or M-PSK.
+    # This checks, one symbol sample at a time,  which complex symbol value
+    # is closest in the complex plane.
     data_out = [np.argmin(np.abs(r-outputVec)) for r in r_hat]
     return data_out
 
