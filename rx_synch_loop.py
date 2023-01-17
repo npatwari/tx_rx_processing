@@ -135,12 +135,18 @@ def lut(data, inputVec, outputVec):
                 output[k] = outputVec[i]
     return output
 
+# PURPOSE: insert 0's between samples to oversample at OS_Rate
+# INPUT: x (data), OS_Rate (how frequently data occurs)
+# OUTPUT: x_s (oversampled data)
 def oversample(x, OS_Rate):
     # Initialize output
     x_s = np.zeros(len(x)*OS_Rate)
     x_s[::OS_Rate] = x
     return x_s
 
+# PURPOSE: create a square root raised cosine pulse shape
+# INPUT: alpha, N, Lp
+# OUTPUT: pulse wave array for srrc
 def SRRC(alpha, N, Lp):
     # Add epsilon to the n values to avoid numerical problems
     n = np.arange(-N*Lp+ (1e-9), N*Lp+1)
@@ -177,6 +183,7 @@ def plot_eye_diagram(y_s, N, offset=0):
     plt.grid(True)
     plt.show()
 
+
 # PURPOSE: Convert binary data to M-ary by making groups of log2(M)
 #          bits and converting each bit to one M-ary digit.
 # INPUT: Binary digit vector, with length as a multiple of log2(M)
@@ -212,7 +219,9 @@ def mary2binary(data, M):
         count = count + log2M
     return binarydata
 
-
+# PURPOSE: create a modulated signal with the defined preamble
+# INPUT: A (sqrt value for modulation), N, alpha, Lp (for srrc)
+# OUTPUT: modulated preamble signal & srrc pulse
 def createPreambleSignal(A, N, alpha, Lp):
 
     # We defined the preamble as this repeating bit signal:
@@ -313,10 +322,19 @@ def plotAllLinks(rx_data, txrxloc):
 def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
 
     # Estimate a frequency offset using the known preamble signal
-    #f_hat  = estimateFrequencyOffset(x0, preambleSignal, lagIndex)
-    rx0_part = np.conjugate(rx0[lagIndex:(lagIndex + len(preambleSignal))])
-    N        = len(preambleSignal)
-    prod_rx0_preamble = rx0_part*preambleSignal
+    if len(preambleSignal) < 200:
+        print("estimateFrequencyOffset: Error in Preamble Signal Length")
+
+    # if you don't discard the start and end of the preamble signal, it
+    # can overlap with the synch word at its tail end, and this will
+    # cause some errors in the frequency estimate.
+    discardSamples = 60
+    middle_of_preamble = preambleSignal[discardSamples:-discardSamples]
+    N        = len(middle_of_preamble)
+    # taking the max of 0 and lagIndex+discardSamples for start >=0 rx0 index
+    startInd = max(0, lagIndex+discardSamples)
+    rx0_part = np.conjugate(rx0[startInd:(startInd + N)])
+    prod_rx0_preamble = rx0_part*middle_of_preamble
 
     # Frequencies at which freq content is calc'ed.
     # We'll multiply the generated matrix by the data to calculate PSD
@@ -327,16 +345,27 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
     # be conservative and make it larger, no problem.  We want to get the offset
     # down to at most 5 Hz b/c the packet duration is about 20 ms, so that would
     # keep the drift to about 1/10 of a rotation over the whole packet.
-    maxFreqOffset   = 0.01000
-    deltaFreqOffset = 0.00002
+    maxFreqOffset   = 0.010000
+    deltaFreqOffset = 0.000005
     freqRange    = np.arange(-maxFreqOffset, maxFreqOffset, deltaFreqOffset)
     temp         = (-1j*2*np.pi) * freqRange
-    expMat       = np.transpose(np.array([np.exp(temp*i) for i in np.arange(N)]))
+    expMat       = np.transpose(np.array([np.exp(temp*i) for i in np.arange(0,N)]))
+    # print(expMat.size)
+    # print(N)
+    # print(len(prod_rx0_preamble))
     PSD_prod     = np.abs(expMat.dot(prod_rx0_preamble))**2
+
+    # # plt.figure()
+    # # plt.plot(240000.0*freqRange,PSD_prod,'r.')
+    # # plt.grid('on')
+    # # plt.xlabel('Frequency Offset')
+    # # plt.ylabel('sqrt PSD')
+    # # plt.show()
+
     maxIndexPSD  = np.argmax(PSD_prod)
     maxIndexFreq = freqRange[maxIndexPSD]
 
-    print('Frequency offset estimate: ' + str(maxIndexFreq*samp_rate) + ' Hz')
+    # # print('Frequency offset estimate: ' + str(maxIndexFreq*samp_rate) + ' Hz')
 
     # Do frequency correction on the input signal
     expTerm = np.exp((1j*2*np.pi * maxIndexFreq) * np.arange(len(rx0)))
@@ -366,38 +395,21 @@ def crossCorrelationMax(rx0, preambleSignal):
     maxIndex = np.argmax(xcorr_mag[:len(xcorr_mag)//2])
     lagIndex = lags[maxIndex]
 
-    print('Max crosscorrelation with preamble at lag ' + str(lagIndex))
+    # # print('Max crosscorrelation with preamble at lag ' + str(lagIndex))
 
-    # Plot the selected signal.
-    plt.figure()
-    plt.plot(np.imag(rx0), label='RX Signal')
-    plt.plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
-    plt.legend()
-    plt.ylabel('Real Signal Value', fontsize=14)
-    plt.xlabel('Sample Index', fontsize=14)
-    plt.tight_layout()
+    # # # Plot the selected signal.
+    # # plt.figure()
+    # # fig, subfigs = plt.subplots(2,1)
+
+    # # subfigs[0].plot(np.real(rx0), label='Real RX Signal')
+    # # subfigs[0].plot(np.imag(rx0), label='Imag RX Signal')
+    # # subfigs[0].plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
+    # # subfigs[0].legend()
+    # # subfigs[1].plot(lags, xcorr_mag, label='|X-Correlation|')
+    # # plt.xlabel('Sample Index', fontsize=14)
+    # # plt.tight_layout()
 
     return lagIndex
-
-
-# PURPOSE: Plot an eye diagram of a signal
-# INPUT: y_s: vector of signal samples out of the matched filter
-#        N: the number of samples per symbol. Assumes that time 0 is at sample
-#        y_s[0]. If not, you must send in an offset integer.
-# OUTPUT: none
-def plot_eye_diagram(y_s, N, offset=0):
-    start_indices = range(int(np.floor(N/2.0)) + offset - 1, len(y_s) - N, N)
-    time_vals     = np.arange(-0.5, 0.5+1.0/N, 1.0/N)
-
-    plt.figure()
-    for i, start_i in enumerate(start_indices):
-        plt.plot(time_vals, y_s[start_i:(start_i+N+1)], 'b-', linewidth=2)
-        
-    plt.xlabel(r'Time $t/T_s$', fontsize=16)
-    plt.xlim([-0.5, 0.5])
-    plt.ylabel('Matched Filter Output', fontsize=16)
-    plt.grid(True)
-    plt.show()
 
 # PURPOSE: Find the symbols which are closest in the complex plane 
 #          to the measured complex received signal values.
@@ -405,6 +417,9 @@ def plot_eye_diagram(y_s, N, offset=0):
 #          and possible signal space complex values. 
 # OUTPUT:  m-ary symbol indices in 0...length(outputVec)-1
 def findClosestComplex(r_hat, outputVec):
+    # outputVec is a 4-length vector for QPSK, would be M for M-QAM or M-PSK.
+    # This checks, one symbol sample at a time,  which complex symbol value
+    # is closest in the complex plane.
     data_out = [np.argmin(np.abs(r-outputVec)) for r in r_hat]
     return data_out
 
@@ -428,6 +443,7 @@ def text2bits(message):
 # OUTPUT:  none
 def constellation_plot(rx4):
 
+    # I like a square plot for the constellation so that both dimensions look equal
     plt.figure(figsize=(5,5))
     ax = plt.gca() 
     ax.set_aspect(1.0) # Make it a square 1x1 ratio plot
@@ -447,6 +463,7 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
     # to the sync word by chance in the data bits, so dont search all bit decisions.
     maxToSearch = 100 
     lagsSynch   = signal.correlation_lags(maxToSearch, len(syncWord))
+    # The "2*x-1" converts from a (0,1) bit to a (-1,1) representation
     temp        = signal.correlate(2*bits_out[:100]-1, 2*syncWord-1)
     maxIndexSync = np.argmax(np.abs(temp))
     maxSync     = temp[maxIndexSync]
@@ -470,70 +487,131 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
 plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-11-2023_22-15-19" 
+folder = "Shout_meas/Shout_meas_01-17-2023_11-22-15"
 jsonfile = 'save_iq_w_tx_file.json'
 rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
+
+print('---------- TRAVERSE ----------')
 
 # load data from the .json, save IQ sample arrays and tx/rx names
 rx_data, _, txrxloc = traverse_dataset(folder)
 
+print('---------- TESTING ----------')
+
+######################################################
+# Link Testing
+# All plots commented out for looped link testing
+# txloc len 6, dim1 len 5, dim2 len 4
+
 # Pick one received signal to demodulate
-txloc = 'cbrssdr1-hospital-comp'
-rxloc = 'cbrssdr1-honors-comp'
+# # txloc = 'cbrssdr1-hospital-comp'
+# # rxloc = 'cbrssdr1-bes-comp'
+txlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
+rxlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
+
+link_names = []
+link_BERS = []
+
+for txloc in txlocs:
+    for rxloc in rxlocs:
+        if txloc != rxloc:
+            for dim1 in range(0,5):
+                for dim2 in range(0,4):
+                    rx0 = rx_data[txloc][dim1][dim2]
+                    A = np.sqrt(9/2)
+                    N = 8
+                    alpha = 0.5
+                    Lp = 6
+                    preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
+                    lagIndex = crossCorrelationMax(rx0, preambleSignal)
+                    rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
+                    rx2 = signal.lfilter(pulse, 1, rx1)
+                    preambleStart = lagIndex + Lp*N*2
+                    rx3 = rx2[preambleStart::N]
+                    rx3 = rx3 / np.median(np.abs(rx3))
+                    startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
+                    rx4 = rx3[startsymbol:]
+                    outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
+                    mary_out  = findClosestComplex(rx4, outputVec)
+                    bits_out  = mary2binary(mary_out, 4)[0]
+                    syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
+                    actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
+                    messageBits = np.array(text2bits(actualMsg))
+                    data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
+                    errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
+                    error_rate = errors/len(data_bits)
+                    # print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
+                    link_str = 'Link: ' + str(txloc) + ' to ' + str(rxloc) + ' - BER: ' + str(error_rate)
+                    link_names.append(link_str)
+                    link_BERS.append(error_rate)
+
+print('---------- DONE ----------')
+# print(link_names)
+link_BERS = np.array(link_BERS)
+
+plt.figure()
+plt.plot(link_BERS, 'r')
+plt.grid('on')
+plt.xlabel('RX signals from links')
+plt.ylabel('bit error rate (BER)')
+plt.show()
 
 # The dictionary element is a list with one element.
 # Then, there are multiple received signals, pick one
-rx0 = rx_data[txloc][0][1]   
+# # rx0 = rx_data[txloc][0][2]
 
+######################################################
 
-#### Synchronization
-A         = np.sqrt(9/2)
-N         = 8   # Samples per symbol
-alpha     = 0.5 # SRRC rolloff factor
-Lp        = 6   # Number of symbol durations on each side of peak of SRRC pulse
-preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
-lagIndex = crossCorrelationMax(rx0, preambleSignal)
-rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
+# # #### Synchronization
+# # A         = np.sqrt(9/2)
+# # N         = 8   # Samples per symbol
+# # alpha     = 0.5 # SRRC rolloff factor
+# # Lp        = 6   # Number of symbol durations on each side of peak of SRRC pulse
+# # preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
+# # lagIndex = crossCorrelationMax(rx0, preambleSignal)
 
-# Plot the frequency corrected signal
-plt.figure()
-plt.plot(np.imag(rx1), label='RX Signal')
-plt.title('TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
-plt.ylabel('Imag', fontsize=14)
-plt.xlabel('Sample Index', fontsize=14)
-plt.tight_layout()
+# # rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
 
-###########################################
-# Matched filter
-# INPUT: frequency synchronized received signal rx1
-# OUTPUT: matched-filtered signal rx2
-rx2 = signal.lfilter(pulse, 1, rx1)
-
-# Plot the matched filter output in an eye diagram (looking at each symbol period)
-preambleStart = lagIndex + Lp*N*2  # There's also the delay b/c the pulse is this long.
-plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
+# # # Plot the frequency corrected signal
+# # plt.figure()
+# # plt.plot(np.real(rx1), label='Real RX Signal')
+# # plt.plot(np.imag(rx1), label='Imag RX Signal')
+# # plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+# # plt.ylabel('Signal Value', fontsize=14)
+# # plt.xlabel('Sample Index', fontsize=14)
+# # plt.tight_layout()
 
 ###########################################
-# Downsample
-# INPUT: Synched matched filter output
-# OUTPUT: Symbol Samples (at n*T_sy)
-rx3 = rx2[preambleStart::N]
-rx3 = rx3 / np.median(np.abs(rx3))  # "AGC" to make symbol values close to +/- 1
+# # # Matched filter
+# # # INPUT: frequency synchronized received signal rx1
+# # # OUTPUT: matched-filtered signal rx2
+# # rx2 = signal.lfilter(pulse, 1, rx1)
 
-# Ignore initial samples that are very close to the origin, compared to later samples.
-startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
-rx4 = rx3[startsymbol:]
+# # # Plot the matched filter output in an eye diagram (looking at each symbol period)
+# # preambleStart = lagIndex + Lp*N*2  # There's also the delay b/c the pulse is this long.
+# # # # plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
+
+###########################################
+# # # Downsample
+# # # INPUT: Synched matched filter output
+# # # OUTPUT: Symbol Samples (at n*T_sy)
+# # rx3 = rx2[preambleStart::N]
+# # rx3 = rx3 / np.median(np.abs(rx3))  # "AGC" to make symbol values close to +/- 1
+
+# # # Ignore initial samples that are very close to the origin, compared to later samples.
+# # startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
+# # rx4 = rx3[startsymbol:]
 
 # Plot a constellation diagram
-constellation_plot(rx4)
+# # constellation_plot(rx4)
 
 ###########################################
-# Symbol Decisions
-# INPUT: Symbol Samples
-# OUTPUT: Bits
-outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
-mary_out  = findClosestComplex(rx4, outputVec)
-bits_out  = mary2binary(mary_out, 4)[0]
+# # # Symbol Decisions
+# # # INPUT: Symbol Samples
+# # # OUTPUT: Bits
+# # outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
+# # mary_out  = findClosestComplex(rx4, outputVec)
+# # bits_out  = mary2binary(mary_out, 4)[0]
 
 ###########################################
 # Sync Word Discovery and Data Bits Extraction
@@ -541,19 +619,19 @@ bits_out  = mary2binary(mary_out, 4)[0]
 #        Must have sync word used at the transmitter.
 # OUTPUT: Bits from the data (the actual message)
 
-# You have to know these things about the packet you are receiving
-syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
-actualMsg   = 'I worked all semester on digital communications and all I got was this sequence of ones and zeros.'
-messageBits = np.array(text2bits(actualMsg))
-# Find the sync word in the vector of all bit decisions, and flip all bits if 
-# The synch word is negated.
-data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
+# # # You have to know these things about the packet you are receiving
+# # syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
+# # actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
+# # messageBits = np.array(text2bits(actualMsg))
+# # # Find the sync word in the vector of all bit decisions, and flip all bits if 
+# # # The synch word is negated.
+# # data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
 
 
 ###########################################
 # Count the bit errors in the message
 # INPUT: estimated bits, actual bits
 # OUTPUT: Bit error rate
-errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
-error_rate = errors/len(data_bits)
-print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
+# # errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
+# # error_rate = errors/len(data_bits)
+# # print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
