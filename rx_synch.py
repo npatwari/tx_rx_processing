@@ -135,12 +135,18 @@ def lut(data, inputVec, outputVec):
                 output[k] = outputVec[i]
     return output
 
+# PURPOSE: insert 0's between samples to oversample at OS_Rate
+# INPUT: x (data), OS_Rate (how frequently data occurs)
+# OUTPUT: x_s (oversampled data)
 def oversample(x, OS_Rate):
     # Initialize output
     x_s = np.zeros(len(x)*OS_Rate)
     x_s[::OS_Rate] = x
     return x_s
 
+# PURPOSE: create a square root raised cosine pulse shape
+# INPUT: alpha, N, Lp
+# OUTPUT: pulse wave array for srrc
 def SRRC(alpha, N, Lp):
     # Add epsilon to the n values to avoid numerical problems
     n = np.arange(-N*Lp+ (1e-9), N*Lp+1)
@@ -177,6 +183,7 @@ def plot_eye_diagram(y_s, N, offset=0):
     plt.grid(True)
     plt.show()
 
+
 # PURPOSE: Convert binary data to M-ary by making groups of log2(M)
 #          bits and converting each bit to one M-ary digit.
 # INPUT: Binary digit vector, with length as a multiple of log2(M)
@@ -212,7 +219,9 @@ def mary2binary(data, M):
         count = count + log2M
     return binarydata
 
-
+# PURPOSE: create a modulated signal with the defined preamble
+# INPUT: A (sqrt value for modulation), N, alpha, Lp (for srrc)
+# OUTPUT: modulated preamble signal & srrc pulse
 def createPreambleSignal(A, N, alpha, Lp):
 
     # We defined the preamble as this repeating bit signal:
@@ -322,6 +331,7 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
     discardSamples = 60
     middle_of_preamble = preambleSignal[discardSamples:-discardSamples]
     N        = len(middle_of_preamble)
+    # taking the max of 0 and lagIndex+discardSamples for start >=0 rx0 index
     startInd = max(0, lagIndex+discardSamples)
     rx0_part = np.conjugate(rx0[startInd:(startInd + N)])
     prod_rx0_preamble = rx0_part*middle_of_preamble
@@ -401,32 +411,15 @@ def crossCorrelationMax(rx0, preambleSignal):
 
     return lagIndex
 
-
-# PURPOSE: Plot an eye diagram of a signal
-# INPUT: y_s: vector of signal samples out of the matched filter
-#        N: the number of samples per symbol. Assumes that time 0 is at sample
-#        y_s[0]. If not, you must send in an offset integer.
-# OUTPUT: none
-def plot_eye_diagram(y_s, N, offset=0):
-    start_indices = range(int(np.floor(N/2.0)) + offset - 1, len(y_s) - N, N)
-    time_vals     = np.arange(-0.5, 0.5+1.0/N, 1.0/N)
-
-    plt.figure()
-    for i, start_i in enumerate(start_indices):
-        plt.plot(time_vals, y_s[start_i:(start_i+N+1)], 'b-', linewidth=2)
-        
-    plt.xlabel(r'Time $t/T_s$', fontsize=16)
-    plt.xlim([-0.5, 0.5])
-    plt.ylabel('Matched Filter Output', fontsize=16)
-    plt.grid(True)
-    plt.show()
-
 # PURPOSE: Find the symbols which are closest in the complex plane 
 #          to the measured complex received signal values.
 # INPUT:   Received r_hat values (output of matched filter downsampled),
 #          and possible signal space complex values. 
 # OUTPUT:  m-ary symbol indices in 0...length(outputVec)-1
 def findClosestComplex(r_hat, outputVec):
+    # outputVec is a 4-length vector for QPSK, would be M for M-QAM or M-PSK.
+    # This checks, one symbol sample at a time,  which complex symbol value
+    # is closest in the complex plane.
     data_out = [np.argmin(np.abs(r-outputVec)) for r in r_hat]
     return data_out
 
@@ -450,6 +443,7 @@ def text2bits(message):
 # OUTPUT:  none
 def constellation_plot(rx4):
 
+    # I like a square plot for the constellation so that both dimensions look equal
     plt.figure(figsize=(5,5))
     ax = plt.gca() 
     ax.set_aspect(1.0) # Make it a square 1x1 ratio plot
@@ -469,6 +463,7 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
     # to the sync word by chance in the data bits, so dont search all bit decisions.
     maxToSearch = 100 
     lagsSynch   = signal.correlation_lags(maxToSearch, len(syncWord))
+    # The "2*x-1" converts from a (0,1) bit to a (-1,1) representation
     temp        = signal.correlate(2*bits_out[:100]-1, 2*syncWord-1)
     maxIndexSync = np.argmax(np.abs(temp))
     maxSync     = temp[maxIndexSync]
@@ -567,7 +562,7 @@ bits_out  = mary2binary(mary_out, 4)[0]
 
 # You have to know these things about the packet you are receiving
 syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
-actualMsg   = 'I worked all semester on digital communications and all I got was this sequence of ones and zeros.'
+actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
 messageBits = np.array(text2bits(actualMsg))
 # Find the sync word in the vector of all bit decisions, and flip all bits if 
 # The synch word is negated.
