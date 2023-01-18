@@ -106,7 +106,7 @@ def traverse_dataset(meas_folder):
                                 print("         repeat", repeat)
 
                                 # peak avg check
-                                txrxloc.setdefault(tx, []).append([rx]*repeat)
+                                txrxloc.setdefault(tx, []).extend([rx]*repeat)
                                 rxsamples = dataset[cmd][cmd_time][tx][tx_gain][rx_gain][rx]['rxsamples'][:repeat, :]
                                 data.setdefault(tx, []).append(np.array(rxsamples))
 
@@ -484,7 +484,7 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
 
 
 # MAIN
-plt.ion()
+# plt.ion()
 
 # load parameters from the json script
 folder = "Shout_meas/Shout_meas_01-17-2023_11-22-15"
@@ -513,41 +513,46 @@ link_names = []
 link_BERS = []
 
 for txloc in txlocs:
-    for rxloc in rxlocs:
-        if txloc != rxloc:
-            for dim1 in range(0,5):
-                for dim2 in range(0,4):
-                    rx0 = rx_data[txloc][dim1][dim2]
-                    A = np.sqrt(9/2)
-                    N = 8
-                    alpha = 0.5
-                    Lp = 6
-                    preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
-                    lagIndex = crossCorrelationMax(rx0, preambleSignal)
-                    rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
-                    rx2 = signal.lfilter(pulse, 1, rx1)
-                    preambleStart = lagIndex + Lp*N*2
-                    rx3 = rx2[preambleStart::N]
-                    rx3 = rx3 / np.median(np.abs(rx3))
-                    startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
-                    rx4 = rx3[startsymbol:]
-                    outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
-                    mary_out  = findClosestComplex(rx4, outputVec)
-                    bits_out  = mary2binary(mary_out, 4)[0]
-                    syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
-                    actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
-                    messageBits = np.array(text2bits(actualMsg))
-                    data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
-                    errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
-                    error_rate = errors/len(data_bits)
-                    # print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
-                    link_str = 'Link: ' + str(txloc) + ' to ' + str(rxloc) + ' - BER: ' + str(error_rate)
-                    link_names.append(link_str)
-                    link_BERS.append(error_rate)
+    rx_data[txloc] = np.vstack(rx_data[txloc])
+    print('[Debug] data', np.shape(rx_data[txloc]))
+    for j, rxloc in enumerate(txrxloc[txloc]):
+        rx0 = rx_data[txloc][j,:]
+        A = np.sqrt(9/2)
+        N = 8
+        alpha = 0.5
+        Lp = 6
+        preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
+        lagIndex = crossCorrelationMax(rx0, preambleSignal)
+        rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
+        rx2 = signal.lfilter(pulse, 1, rx1)
+        preambleStart = lagIndex + Lp*N*2
+        rx3 = rx2[preambleStart::N]
+        rx3 = rx3 / np.median(np.abs(rx3))
+        startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
+        rx4 = rx3[startsymbol:]
+        outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
+        mary_out  = findClosestComplex(rx4, outputVec)
+        bits_out  = mary2binary(mary_out, 4)[0]
+        syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
+        actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
+        messageBits = np.array(text2bits(actualMsg))
+        data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
+        errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
+        error_rate = errors/len(data_bits)
+        # print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
+        link_str = 'Link: ' + str(txloc) + ' to ' + str(rxloc) + ' - BER: ' + str(error_rate)
+        link_names.append(link_str)
+        link_BERS.append(error_rate)
+
+            
 
 print('---------- DONE ----------')
-# print(link_names)
 link_BERS = np.array(link_BERS)
+
+idx = np.where(link_BERS<1e-2)[0]
+for id in idx:
+    print('links with <1e-2 error: ', link_names[id])
+
 
 plt.figure()
 plt.plot(link_BERS, 'r')
