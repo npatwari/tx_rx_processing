@@ -243,9 +243,10 @@ def binvector2str(binvector):
 # Signal Generation
 # INPUT: none
 # OUTPUT: binary data
+plt.ion()
 
 if 1:
-    temp         =  'I worked all semester on digital communications and all I got was this sequence of ones and zeros.'
+    temp         =  'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
     messagebits  = np.array(text2bits(temp))    
     preamble     = np.tile([1, 1, 0, 0], 16)
     sync         = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
@@ -299,7 +300,11 @@ if 1:
     x_s_Q = np.reshape(x_s_Q, x_s_Q.size)
     s_0_I = np.convolve(x_s_I, pulse, mode='full')
     s_0_Q = np.convolve(x_s_Q, pulse, mode='full')
-    
+    plt.figure()
+    plt.plot(pulse,label='SRRC pulse shape')
+    plt.legend()
+    plt.show()
+
     ###########################################
     ### Up-convert
     ### INPUT: s, baseband signal
@@ -309,6 +314,17 @@ if 1:
     #    n = list(range(0, len(s_0_I)))
     s = s_0_I + 1j*s_0_Q
 
+    # Insert 1024 zeros before start of signal to make sure that
+    # some samples can be thrown out at the start of the received 
+    # signal without losing the packet.
+    s = np.insert(s,0,np.zeros(1024))
+
+    plt.figure()
+    plt.plot(np.real(s[1700:2000]),label='Real Signal')
+    plt.plot(np.imag(s[1700:2000]),label='Imag Signal')
+    plt.grid('on')
+    plt.legend()
+    plt.show()
     write_complex_binary(s, 'QPSK_signal2.iq')
 
     # for each in n:
