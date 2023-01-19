@@ -430,7 +430,7 @@ def text2bits(message):
     temp_message = []
     final_message = []
     for each in message:
-        temp_message.append(format(ord(each), '07b'))
+        temp_message.append(format(ord(each), '08b'))
     for every in temp_message:
         for digit in every:
             final_message.append(int(digit))
@@ -480,6 +480,119 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
         data_bits = final_bits_out[dataBitsStartIndex:]
         print("Error: The packet extended beyond the end of the sample file.")
     return data_bits
+
+def DD_carrier_sync(z, M, BnTs, zeta=0.707, mod_type = 'MPSK', type = 0, open_loop = False):
+    """
+    source:  https://scikit-dsp-comm.readthedocs.io/en/latest/synchronization.html
+    z_prime,a_hat,e_phi = DD_carrier_sync(z,M,BnTs,zeta=0.707,type=0)
+    Decision directed carrier phase tracking
+    
+    INPUT
+    ----    
+        z = complex baseband PSK signal at one sample per symbol
+        M = The PSK modulation order, i.e., 2, 8, or 8.
+        BnTs = time bandwidth product of loop bandwidth and the symbol period,
+               thus the loop bandwidth as a fraction of the symbol rate.
+        zeta = loop damping factor
+        type = Phase error detector type: 0 <> ML, 1 <> heuristic
+    
+    OUTPUT
+    ----
+        z_prime = phase rotation output (like soft symbol values)
+        a_hat = the hard decision symbol values landing at the constellation
+               values
+        e_phi = the phase error e(k) into the loop filter
+
+        Ns = Nominal number of samples per symbol (Ts/T) in the carrier 
+            phase tracking loop, almost always 1
+        Kp = The phase detector gain in the carrier phase tracking loop; 
+            This value depends upon the algorithm type. For the ML scheme
+            described at the end of notes Chapter 9, A = 1, K 1/sqrt(2),
+            so Kp = sqrt(2).
+    
+    Mark Wickert July 2014
+    Updated for improved MPSK performance April 2020
+    Added experimental MQAM capability April 2020
+
+    Motivated by code found in M. Rice, Digital Communications A Discrete-Time 
+    Approach, Prentice Hall, New Jersey, 2009. (ISBN 978-0-13-030497-1).
+    """
+    Ns = 1
+    z_prime = np.zeros_like(z)
+    a_hat = np.zeros_like(z)
+    e_phi = np.zeros(len(z))
+    theta_h = np.zeros(len(z))
+    theta_hat = 0
+
+    # Tracking loop constants
+    Kp = 1 # What is it for the different schemes and modes?
+    K0 = 1 
+    K1 = 4*zeta/(zeta + 1/(4*zeta))*BnTs/Ns/Kp/K0 # C.46 in the rice book
+    K2 = 4/(zeta + 1/(4*zeta))**2*(BnTs/Ns)**2/Kp/K0
+    
+    # Initial condition
+    vi = 0
+    # Scaling for MQAM using signal power
+    # and known relationship for QAM.
+    if mod_type == 'MQAM':
+        z_scale = np.std(z) * np.sqrt(3/(2*(M-1)))
+        z = z/z_scale
+    for nn in range(len(z)):
+        # Multiply by the phase estimate exp(-j*theta_hat[n])
+        z_prime[nn] = z[nn]*np.exp(-1j*theta_hat)
+        if mod_type == 'MPSK':
+            if M == 2:
+                a_hat[nn] = np.sign(z_prime[nn].real) + 1j*0
+            elif M == 4:
+                a_hat[nn] = (np.sign(z_prime[nn].real) + \
+                             1j*np.sign(z_prime[nn].imag))/np.sqrt(2)
+            elif M > 4:
+                # round to the nearest integer and fold to nonnegative
+                # integers; detection into M-levels with thresholds at mid points.
+                a_hat[nn] = np.mod((np.rint(np.angle(z_prime[nn])*M/2/np.pi)).astype(np.int),M)
+                a_hat[nn] = np.exp(1j*2*np.pi*a_hat[nn]/M)
+            else:
+                print('M must be 2, 4, 8, etc.')
+        elif mod_type == 'MQAM':
+            # Scale adaptively assuming var(x_hat) is proportional to 
+            if M ==2 or M == 4 or M == 16 or M == 64 or M == 256:
+                x_m = np.sqrt(M)-1
+                if M == 2: x_m = 1
+                # Shift to quadrant one for hard decisions 
+                a_hat_shift = (z_prime[nn] + x_m*(1+1j))/2
+                # Soft IQ symbol values are converted to hard symbol decisions
+                a_hat_shiftI = np.int16(np.clip(np.rint(a_hat_shift.real),0,x_m))
+                a_hat_shiftQ = np.int16(np.clip(np.rint(a_hat_shift.imag),0,x_m))
+                # Shift back to antipodal QAM
+                a_hat[nn] = 2*(a_hat_shiftI + 1j*a_hat_shiftQ) - x_m*(1+1j)
+            else:
+                print('M must be 2, 4, 16, 64, or 256');
+        if type == 0:
+            # Maximum likelihood (ML) Rice
+            e_phi[nn] = z_prime[nn].imag * a_hat[nn].real - \
+                        z_prime[nn].real * a_hat[nn].imag
+        elif type == 1:
+            # Heuristic Rice
+            e_phi[nn] = np.angle(z_prime[nn]) - np.angle(a_hat[nn])
+            # Wrap the phase to [-pi,pi]  
+            e_phi[nn] = np.angle(np.exp(1j*e_phi[nn]))
+        elif type == 2:
+            # Ouyang and Wang 2002 MQAM paper
+            e_phi[nn] = imag(z_prime[nn]/a_hat[nn])
+        else:
+            print('Type must be 0 or 1')
+        vp = K1*e_phi[nn]      # proportional component of loop filter
+        vi = vi + K2*e_phi[nn] # integrator component of loop filter
+        v = vp + vi        # loop filter output
+        theta_hat = np.mod(theta_hat + v,2*np.pi)
+        theta_h[nn] = theta_hat # phase track output array
+        if open_loop:
+            theta_hat = 0 # for open-loop testing
+    
+    # Normalize MQAM outputs
+    if mod_type == 'MQAM': 
+        z_prime *= z_scale
+    return z_prime, a_hat, e_phi, theta_h
 
 # MAIN
 plt.ion()
@@ -587,3 +700,38 @@ for i in range(rxrepeat):
     errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
     error_rate = errors/len(data_bits)
     print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
+
+    ###########################################
+    print('data_bits', len(data_bits))
+    # PURPOSE: Convert a vector of zeros and ones to a string (char array)
+    # INPUT: Expects a row vector of zeros and ones, a multiple of 7 length
+    #        The most significant bit of each character is always first.
+    # OUTPUT: A string
+    def binvector2str(binvector):
+        length = len(binvector)
+        eps = np.finfo('float').eps
+        if abs(length/7 - round(length/7)) > eps:
+            print('Length of bit stream must be a multiple of 7 to convert to a string.')
+        # Each character requires 7 bits in standard ASCII
+        num_characters = round(length/7)
+        # Maximum value is first in the vector. Otherwise would use 0:1:length-1
+        start = 6
+        bin_values = []
+        while start >= 0:
+            bin_values.append(int(2**start))
+            start = start - 1
+        bin_values = np.array(bin_values)
+        bin_values = np.transpose(bin_values)
+        str_out = '' # Initialize character vector
+        for i in range(num_characters):
+            single_char = binvector[i*7:i*7+7]
+            value = 0
+            for counter in range(len(single_char)):
+                value = value + (int(single_char[counter]) * int(bin_values[counter]))
+            str_out += chr(int(value))
+        return str_out
+
+
+    message_out = binvector2str(data_bits)
+    print('Message Recieved: ')
+    print(message_out)
