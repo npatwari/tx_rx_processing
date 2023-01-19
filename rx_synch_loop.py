@@ -39,8 +39,10 @@ def JsonLoad(folder, json_file):
     rxfreq = config_dict['rxfreq']
     wotxrepeat = config_dict['wotxrepeat']
     rxrepeat = config_dict['rxrepeat']
+    txnodes = config_dict['txclients']
+    rxnodes = config_dict['rxclients']
 
-    return rxrepeat, rxrate
+    return rxrepeat, rxrate, txnodes, rxnodes
 
 def traverse_dataset(meas_folder):
     '''
@@ -431,7 +433,7 @@ def text2bits(message):
     temp_message = []
     final_message = []
     for each in message:
-        temp_message.append(format(ord(each), '08b'))
+        temp_message.append(format(ord(each), '07b'))
     for every in temp_message:
         for digit in every:
             final_message.append(int(digit))
@@ -487,9 +489,9 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
 # plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-17-2023_11-22-15"
+folder = "Shout_meas/Shout_meas_01-11-2023_22-44-37"
 jsonfile = 'save_iq_w_tx_file.json'
-rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
+rxrepeat, samp_rate, txlocs, rxlocs = JsonLoad(folder, jsonfile)
 
 print('---------- TRAVERSE ----------')
 
@@ -503,11 +505,9 @@ print('---------- TESTING ----------')
 # All plots commented out for looped link testing
 # txloc len 6, dim1 len 5, dim2 len 4
 
-# Pick one received signal to demodulate
-# # txloc = 'cbrssdr1-hospital-comp'
-# # rxloc = 'cbrssdr1-bes-comp'
-txlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
-rxlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
+# # Pick one received signal to demodulate
+# txlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
+# rxlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
 
 link_names = []
 link_BERS = []
@@ -549,6 +549,8 @@ for txloc in txlocs:
 print('---------- DONE ----------')
 link_BERS = np.array(link_BERS)
 
+for link in link_names:
+    print(link, '\n')
 idx = np.where(link_BERS<1e-2)[0]
 for id in idx:
     print('links with <1e-2 error: ', link_names[id])
