@@ -106,7 +106,7 @@ def traverse_dataset(meas_folder):
                                 print("         repeat", repeat)
 
                                 # peak avg check
-                                txrxloc.setdefault(tx, []).append([rx]*repeat)
+                                txrxloc.setdefault(tx, []).extend([rx]*repeat)
                                 rxsamples = dataset[cmd][cmd_time][tx][tx_gain][rx_gain][rx]['rxsamples'][:repeat, :]
                                 data.setdefault(tx, []).append(np.array(rxsamples))
 
@@ -398,7 +398,6 @@ def crossCorrelationMax(rx0, preambleSignal):
     print('Max crosscorrelation with preamble at lag ' + str(lagIndex))
 
     # Plot the selected signal.
-    plt.figure()
     fig, subfigs = plt.subplots(2,1)
 
     subfigs[0].plot(np.real(rx0), label='Real RX Signal')
@@ -431,7 +430,7 @@ def text2bits(message):
     temp_message = []
     final_message = []
     for each in message:
-        temp_message.append(format(ord(each), '07b'))
+        temp_message.append(format(ord(each), '08b'))
     for every in temp_message:
         for digit in every:
             final_message.append(int(digit))
@@ -482,12 +481,124 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
         print("Error: The packet extended beyond the end of the sample file.")
     return data_bits
 
+def DD_carrier_sync(z, M, BnTs, zeta=0.707, mod_type = 'MPSK', type = 0, open_loop = False):
+    """
+    source:  https://scikit-dsp-comm.readthedocs.io/en/latest/synchronization.html
+    z_prime,a_hat,e_phi = DD_carrier_sync(z,M,BnTs,zeta=0.707,type=0)
+    Decision directed carrier phase tracking
+    
+    INPUT
+    ----    
+        z = complex baseband PSK signal at one sample per symbol
+        M = The PSK modulation order, i.e., 2, 8, or 8.
+        BnTs = time bandwidth product of loop bandwidth and the symbol period,
+               thus the loop bandwidth as a fraction of the symbol rate.
+        zeta = loop damping factor
+        type = Phase error detector type: 0 <> ML, 1 <> heuristic
+    
+    OUTPUT
+    ----
+        z_prime = phase rotation output (like soft symbol values)
+        a_hat = the hard decision symbol values landing at the constellation
+               values
+        e_phi = the phase error e(k) into the loop filter
+
+        Ns = Nominal number of samples per symbol (Ts/T) in the carrier 
+            phase tracking loop, almost always 1
+        Kp = The phase detector gain in the carrier phase tracking loop; 
+            This value depends upon the algorithm type. For the ML scheme
+            described at the end of notes Chapter 9, A = 1, K 1/sqrt(2),
+            so Kp = sqrt(2).
+    
+    Mark Wickert July 2014
+    Updated for improved MPSK performance April 2020
+    Added experimental MQAM capability April 2020
+
+    Motivated by code found in M. Rice, Digital Communications A Discrete-Time 
+    Approach, Prentice Hall, New Jersey, 2009. (ISBN 978-0-13-030497-1).
+    """
+    Ns = 1
+    z_prime = np.zeros_like(z)
+    a_hat = np.zeros_like(z)
+    e_phi = np.zeros(len(z))
+    theta_h = np.zeros(len(z))
+    theta_hat = 0
+
+    # Tracking loop constants
+    Kp = 1 # What is it for the different schemes and modes?
+    K0 = 1 
+    K1 = 4*zeta/(zeta + 1/(4*zeta))*BnTs/Ns/Kp/K0 # C.46 in the rice book
+    K2 = 4/(zeta + 1/(4*zeta))**2*(BnTs/Ns)**2/Kp/K0
+    
+    # Initial condition
+    vi = 0
+    # Scaling for MQAM using signal power
+    # and known relationship for QAM.
+    if mod_type == 'MQAM':
+        z_scale = np.std(z) * np.sqrt(3/(2*(M-1)))
+        z = z/z_scale
+    for nn in range(len(z)):
+        # Multiply by the phase estimate exp(-j*theta_hat[n])
+        z_prime[nn] = z[nn]*np.exp(-1j*theta_hat)
+        if mod_type == 'MPSK':
+            if M == 2:
+                a_hat[nn] = np.sign(z_prime[nn].real) + 1j*0
+            elif M == 4:
+                a_hat[nn] = (np.sign(z_prime[nn].real) + \
+                             1j*np.sign(z_prime[nn].imag))/np.sqrt(2)
+            elif M > 4:
+                # round to the nearest integer and fold to nonnegative
+                # integers; detection into M-levels with thresholds at mid points.
+                a_hat[nn] = np.mod((np.rint(np.angle(z_prime[nn])*M/2/np.pi)).astype(np.int),M)
+                a_hat[nn] = np.exp(1j*2*np.pi*a_hat[nn]/M)
+            else:
+                print('M must be 2, 4, 8, etc.')
+        elif mod_type == 'MQAM':
+            # Scale adaptively assuming var(x_hat) is proportional to 
+            if M ==2 or M == 4 or M == 16 or M == 64 or M == 256:
+                x_m = np.sqrt(M)-1
+                if M == 2: x_m = 1
+                # Shift to quadrant one for hard decisions 
+                a_hat_shift = (z_prime[nn] + x_m*(1+1j))/2
+                # Soft IQ symbol values are converted to hard symbol decisions
+                a_hat_shiftI = np.int16(np.clip(np.rint(a_hat_shift.real),0,x_m))
+                a_hat_shiftQ = np.int16(np.clip(np.rint(a_hat_shift.imag),0,x_m))
+                # Shift back to antipodal QAM
+                a_hat[nn] = 2*(a_hat_shiftI + 1j*a_hat_shiftQ) - x_m*(1+1j)
+            else:
+                print('M must be 2, 4, 16, 64, or 256');
+        if type == 0:
+            # Maximum likelihood (ML) Rice
+            e_phi[nn] = z_prime[nn].imag * a_hat[nn].real - \
+                        z_prime[nn].real * a_hat[nn].imag
+        elif type == 1:
+            # Heuristic Rice
+            e_phi[nn] = np.angle(z_prime[nn]) - np.angle(a_hat[nn])
+            # Wrap the phase to [-pi,pi]  
+            e_phi[nn] = np.angle(np.exp(1j*e_phi[nn]))
+        elif type == 2:
+            # Ouyang and Wang 2002 MQAM paper
+            e_phi[nn] = imag(z_prime[nn]/a_hat[nn])
+        else:
+            print('Type must be 0 or 1')
+        vp = K1*e_phi[nn]      # proportional component of loop filter
+        vi = vi + K2*e_phi[nn] # integrator component of loop filter
+        v = vp + vi        # loop filter output
+        theta_hat = np.mod(theta_hat + v,2*np.pi)
+        theta_h[nn] = theta_hat # phase track output array
+        if open_loop:
+            theta_hat = 0 # for open-loop testing
+    
+    # Normalize MQAM outputs
+    if mod_type == 'MQAM': 
+        z_prime *= z_scale
+    return z_prime, a_hat, e_phi, theta_h
 
 # MAIN
 plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-11-2023_22-15-19"
+folder = "Shout_meas/Shout_meas_01-17-2023_11-22-15"
 jsonfile = 'save_iq_w_tx_file.json'
 rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 
@@ -495,84 +606,132 @@ rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 rx_data, _, txrxloc = traverse_dataset(folder)
 
 # Pick one received signal to demodulate
-txloc = 'cbrssdr1-hospital-comp'
+txloc = 'cbrssdr1-smt-comp'
 rxloc = 'cbrssdr1-honors-comp'
 
-# The dictionary element is a list with one element.
-# Then, there are multiple received signals, pick one
-rx0 = rx_data[txloc][0][2]
+for i in range(rxrepeat):
+    # The dictionary element is a list with one element.
+    # Then, there are multiple received signals, pick one
+    rx0 = rx_data[txloc][txrxloc[txloc]==rxloc][1]
+    print('Link: {} to {}'.format(txloc, txrxloc[txloc][txrxloc[txloc]==rxloc]))
+
+    ### low-pass filter
+    stopband_attenuation = 60.0
+    transition_bandwidth = 0.05
+    filterN, beta = signal.kaiserord(stopband_attenuation, transition_bandwidth)
+    cutoff_norm = 0.15
+    # Create the filter coefficients
+    taps = signal.firwin(filterN, cutoff_norm, window=('kaiser', beta))
+    # Use the filter on the received signal
+    filtered_rx0 = signal.lfilter(taps, 1.0, rx0)
+
+    filtered_rx1, _, _, _ = DD_carrier_sync(filtered_rx0, 4, 0.02, zeta=0.707)
+
+    #### Synchronization
+    A         = np.sqrt(9/2)
+    N         = 8   # Samples per symbol
+    alpha     = 0.5 # SRRC rolloff factor
+    Lp        = 6   # Number of symbol durations on each side of peak of SRRC pulse
+    preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
+    lagIndex = crossCorrelationMax(rx0, preambleSignal)
+
+    rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
+
+    # Plot the frequency corrected signal
+    plt.figure()
+    plt.plot(np.real(rx1), label='Real RX Signal')
+    plt.plot(np.imag(rx1), label='Imag RX Signal')
+    plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+    plt.ylabel('Signal Value', fontsize=14)
+    plt.xlabel('Sample Index', fontsize=14)
+    plt.tight_layout()
+
+    ###########################################
+    # Matched filter
+    # INPUT: frequency synchronized received signal rx1
+    # OUTPUT: matched-filtered signal rx2
+    rx2 = signal.lfilter(pulse, 1, rx1)
+
+    # Plot the matched filter output in an eye diagram (looking at each symbol period)
+    preambleStart = lagIndex + Lp*N*2  # There's also the delay b/c the pulse is this long.
+    plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
+
+    ###########################################
+    # Downsample
+    # INPUT: Synched matched filter output
+    # OUTPUT: Symbol Samples (at n*T_sy)
+    rx3 = rx2[preambleStart::N]
+    rx3 = rx3 / np.median(np.abs(rx3))  # "AGC" to make symbol values close to +/- 1
+
+    # Ignore initial samples that are very close to the origin, compared to later samples.
+    startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
+    rx4 = rx3[startsymbol:]
+
+    # Plot a constellation diagram
+    constellation_plot(rx4)
+
+    ###########################################
+    # Symbol Decisions
+    # INPUT: Symbol Samples
+    # OUTPUT: Bits
+    outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
+    mary_out  = findClosestComplex(rx4, outputVec)
+    bits_out  = mary2binary(mary_out, 4)[0]
+
+    ###########################################
+    # Sync Word Discovery and Data Bits Extraction
+    # INPUT: Bit estimates from the received signal. 
+    #        Must have sync word used at the transmitter.
+    # OUTPUT: Bits from the data (the actual message)
+
+    # You have to know these things about the packet you are receiving
+    syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
+    actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
+    messageBits = np.array(text2bits(actualMsg))
+    # Find the sync word in the vector of all bit decisions, and flip all bits if 
+    # The synch word is negated.
+    data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
 
 
-#### Synchronization
-A         = np.sqrt(9/2)
-N         = 8   # Samples per symbol
-alpha     = 0.5 # SRRC rolloff factor
-Lp        = 6   # Number of symbol durations on each side of peak of SRRC pulse
-preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
-lagIndex = crossCorrelationMax(rx0, preambleSignal)
+    ###########################################
+    # Count the bit errors in the message
+    # INPUT: estimated bits, actual bits
+    # OUTPUT: Bit error rate
+    errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
+    error_rate = errors/len(data_bits)
+    print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
 
-rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
-
-# Plot the frequency corrected signal
-plt.figure()
-plt.plot(np.real(rx1), label='Real RX Signal')
-plt.plot(np.imag(rx1), label='Imag RX Signal')
-plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
-plt.ylabel('Signal Value', fontsize=14)
-plt.xlabel('Sample Index', fontsize=14)
-plt.tight_layout()
-
-###########################################
-# Matched filter
-# INPUT: frequency synchronized received signal rx1
-# OUTPUT: matched-filtered signal rx2
-rx2 = signal.lfilter(pulse, 1, rx1)
-
-# Plot the matched filter output in an eye diagram (looking at each symbol period)
-preambleStart = lagIndex + Lp*N*2  # There's also the delay b/c the pulse is this long.
-plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
-
-###########################################
-# Downsample
-# INPUT: Synched matched filter output
-# OUTPUT: Symbol Samples (at n*T_sy)
-rx3 = rx2[preambleStart::N]
-rx3 = rx3 / np.median(np.abs(rx3))  # "AGC" to make symbol values close to +/- 1
-
-# Ignore initial samples that are very close to the origin, compared to later samples.
-startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
-rx4 = rx3[startsymbol:]
-
-# Plot a constellation diagram
-constellation_plot(rx4)
-
-###########################################
-# Symbol Decisions
-# INPUT: Symbol Samples
-# OUTPUT: Bits
-outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
-mary_out  = findClosestComplex(rx4, outputVec)
-bits_out  = mary2binary(mary_out, 4)[0]
-
-###########################################
-# Sync Word Discovery and Data Bits Extraction
-# INPUT: Bit estimates from the received signal. 
-#        Must have sync word used at the transmitter.
-# OUTPUT: Bits from the data (the actual message)
-
-# You have to know these things about the packet you are receiving
-syncWord    = np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0])
-actualMsg   = 'I worked all week on digital communications and all I got was this sequence of ones and zeros.'
-messageBits = np.array(text2bits(actualMsg))
-# Find the sync word in the vector of all bit decisions, and flip all bits if 
-# The synch word is negated.
-data_bits   = phaseSyncAndExtractMessage(bits_out, syncWord, len(messageBits))
+    ###########################################
+    print('data_bits', len(data_bits))
+    # PURPOSE: Convert a vector of zeros and ones to a string (char array)
+    # INPUT: Expects a row vector of zeros and ones, a multiple of 7 length
+    #        The most significant bit of each character is always first.
+    # OUTPUT: A string
+    def binvector2str(binvector):
+        length = len(binvector)
+        eps = np.finfo('float').eps
+        if abs(length/7 - round(length/7)) > eps:
+            print('Length of bit stream must be a multiple of 7 to convert to a string.')
+        # Each character requires 7 bits in standard ASCII
+        num_characters = round(length/7)
+        # Maximum value is first in the vector. Otherwise would use 0:1:length-1
+        start = 6
+        bin_values = []
+        while start >= 0:
+            bin_values.append(int(2**start))
+            start = start - 1
+        bin_values = np.array(bin_values)
+        bin_values = np.transpose(bin_values)
+        str_out = '' # Initialize character vector
+        for i in range(num_characters):
+            single_char = binvector[i*7:i*7+7]
+            value = 0
+            for counter in range(len(single_char)):
+                value = value + (int(single_char[counter]) * int(bin_values[counter]))
+            str_out += chr(int(value))
+        return str_out
 
 
-###########################################
-# Count the bit errors in the message
-# INPUT: estimated bits, actual bits
-# OUTPUT: Bit error rate
-errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
-error_rate = errors/len(data_bits)
-print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
+    message_out = binvector2str(data_bits)
+    print('Message Recieved: ')
+    print(message_out)

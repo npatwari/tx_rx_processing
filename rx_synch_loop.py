@@ -357,17 +357,17 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
     # print(len(prod_rx0_preamble))
     PSD_prod     = np.abs(expMat.dot(prod_rx0_preamble))**2
 
-    # # plt.figure()
-    # # plt.plot(240000.0*freqRange,PSD_prod,'r.')
-    # # plt.grid('on')
-    # # plt.xlabel('Frequency Offset')
-    # # plt.ylabel('sqrt PSD')
-    # # plt.show()
+    # plt.figure()
+    # plt.plot(240000.0*freqRange,PSD_prod,'r.')
+    # plt.grid('on')
+    # plt.xlabel('Frequency Offset')
+    # plt.ylabel('sqrt PSD')
+    # plt.show()
 
     maxIndexPSD  = np.argmax(PSD_prod)
     maxIndexFreq = freqRange[maxIndexPSD]
 
-    # # print('Frequency offset estimate: ' + str(maxIndexFreq*samp_rate) + ' Hz')
+    # print('Frequency offset estimate: ' + str(maxIndexFreq*samp_rate) + ' Hz')
 
     # Do frequency correction on the input signal
     expTerm = np.exp((1j*2*np.pi * maxIndexFreq) * np.arange(len(rx0)))
@@ -397,19 +397,18 @@ def crossCorrelationMax(rx0, preambleSignal):
     maxIndex = np.argmax(xcorr_mag[:len(xcorr_mag)//2])
     lagIndex = lags[maxIndex]
 
-    # # print('Max crosscorrelation with preamble at lag ' + str(lagIndex))
+    # print('Max crosscorrelation with preamble at lag ' + str(lagIndex))
 
-    # # # Plot the selected signal.
-    # # plt.figure()
-    # # fig, subfigs = plt.subplots(2,1)
+    # # Plot the selected signal.
+    # fig, subfigs = plt.subplots(2,1)
 
-    # # subfigs[0].plot(np.real(rx0), label='Real RX Signal')
-    # # subfigs[0].plot(np.imag(rx0), label='Imag RX Signal')
-    # # subfigs[0].plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
-    # # subfigs[0].legend()
-    # # subfigs[1].plot(lags, xcorr_mag, label='|X-Correlation|')
-    # # plt.xlabel('Sample Index', fontsize=14)
-    # # plt.tight_layout()
+    # subfigs[0].plot(np.real(rx0), label='Real RX Signal')
+    # subfigs[0].plot(np.imag(rx0), label='Imag RX Signal')
+    # subfigs[0].plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
+    # subfigs[0].legend()
+    # subfigs[1].plot(lags, xcorr_mag, label='|X-Correlation|')
+    # plt.xlabel('Sample Index', fontsize=14)
+    # plt.tight_layout()
 
     return lagIndex
 
@@ -486,10 +485,10 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
 
 
 # MAIN
-# plt.ion()
+plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-11-2023_22-44-37"
+folder = "Shout_meas/Shout_meas_01-19-2023_11-06-53"
 jsonfile = 'save_iq_w_tx_file.json'
 rxrepeat, samp_rate, txlocs, rxlocs = JsonLoad(folder, jsonfile)
 
@@ -509,14 +508,25 @@ print('---------- TESTING ----------')
 # txlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
 # rxlocs = np.array(['cbrssdr1-hospital-comp', 'cbrssdr1-honors-comp', 'cbrssdr1-smt-comp', 'cbrssdr1-bes-comp', 'cbrssdr1-fm-comp', 'cbrssdr1-browning-comp'])
 
+debug = 0
 link_names = []
 link_BERS = []
 
 for txloc in txlocs:
+    # if txloc != 'cbrssdr1-smt-comp':continue
     rx_data[txloc] = np.vstack(rx_data[txloc])
-    print('[Debug] data', np.shape(rx_data[txloc]))
     for j, rxloc in enumerate(txrxloc[txloc]):
+        # if rxloc != 'cbrssdr1-honors-comp':continue
         rx0 = rx_data[txloc][j,:]
+        stopband_attenuation = 60.0
+        transition_bandwidth = 0.05
+        filterN, beta = signal.kaiserord(stopband_attenuation, transition_bandwidth)
+        cutoff_norm = 0.15
+        # Create the filter coefficients
+        taps = signal.firwin(filterN, cutoff_norm, window=('kaiser', beta))
+        # Use the filter on the received signal
+        filtered_rx0 = signal.lfilter(taps, 1.0, rx0)
+
         A = np.sqrt(9/2)
         N = 8
         alpha = 0.5
@@ -530,6 +540,9 @@ for txloc in txlocs:
         rx3 = rx3 / np.median(np.abs(rx3))
         startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
         rx4 = rx3[startsymbol:]
+        if debug:
+            constellation_plot(rx4)
+
         outputVec = np.array([1+1j, -1+1j, 1-1j, -1-1j])
         mary_out  = findClosestComplex(rx4, outputVec)
         bits_out  = mary2binary(mary_out, 4)[0]
@@ -554,7 +567,6 @@ for link in link_names:
 idx = np.where(link_BERS<1e-2)[0]
 for id in idx:
     print('links with <1e-2 error: ', link_names[id])
-
 
 plt.figure()
 plt.plot(link_BERS, 'r')
