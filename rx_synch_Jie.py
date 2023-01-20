@@ -5,6 +5,8 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib import rc
 import datetime
+import scipy.signal as signal
+# import scipy.signal.lfilter as lfilter
 
 rc('xtick', labelsize=14) 
 rc('ytick', labelsize=14)
@@ -181,7 +183,7 @@ def plot_eye_diagram(y_s, N, offset=0):
     plt.xlim([-0.5, 0.5])
     plt.ylabel('Matched Filter Output', fontsize=16)
     plt.grid(True)
-    plt.show()
+    # plt.show()
 
 
 # PURPOSE: Convert binary data to M-ary by making groups of log2(M)
@@ -319,7 +321,7 @@ def plotAllLinks(rx_data, txrxloc):
 # OUTPUT:  rx1: Frequency-corrected received signal
 #          frequencyOffset
 #
-def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
+def estimateFrequencyOffset(rx0, preambleSignal, lagIndex,debug=False):
 
     # Estimate a frequency offset using the known preamble signal
     if len(preambleSignal) < 200:
@@ -350,22 +352,23 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
     freqRange    = np.arange(-maxFreqOffset, maxFreqOffset, deltaFreqOffset)
     temp         = (-1j*2*np.pi) * freqRange
     expMat       = np.transpose(np.array([np.exp(temp*i) for i in np.arange(0,N)]))
-    print(expMat.size)
-    print(N)
-    print(len(prod_rx0_preamble))
+    # print('expMat.size',expMat.size)
+    # print('N',N)
+    # print('len(prod_rx0_preamble)',len(prod_rx0_preamble))
     PSD_prod     = np.abs(expMat.dot(prod_rx0_preamble))**2
 
-    plt.figure()
-    plt.plot(240000.0*freqRange,PSD_prod,'r.')
-    plt.grid('on')
-    plt.xlabel('Frequency Offset')
-    plt.ylabel('sqrt PSD')
-    plt.show()
+    if debug:
+        plt.figure()
+        plt.plot(250000.0*freqRange,PSD_prod,'r.')
+        plt.grid('on')
+        plt.xlabel('Frequency Offset')
+        plt.ylabel('sqrt PSD')
+    # plt.show()
 
     maxIndexPSD  = np.argmax(PSD_prod)
     maxIndexFreq = freqRange[maxIndexPSD]
 
-    print('Frequency offset estimate: ' + str(maxIndexFreq*samp_rate) + ' Hz')
+    print('[estimateFrequencyOffset] Frequency offset estimate: ' + str(maxIndexFreq*samp_rate) + ' Hz')
 
     # Do frequency correction on the input signal
     expTerm = np.exp((1j*2*np.pi * maxIndexFreq) * np.arange(len(rx0)))
@@ -384,7 +387,7 @@ def estimateFrequencyOffset(rx0, preambleSignal, lagIndex):
 # OUTPUT:  lagIndex: the index of rx0 where the preamble signal has highest 
 #              cross-correlation
 #
-def crossCorrelationMax(rx0, preambleSignal):
+def crossCorrelationMax(rx0, preambleSignal, debug=False):
 
     # Cross correlate with the preamble to find it in the noisy signal
     lags      = signal.correlation_lags(len(rx0), len(preambleSignal), mode='same')
@@ -395,18 +398,19 @@ def crossCorrelationMax(rx0, preambleSignal):
     maxIndex = np.argmax(xcorr_mag[:len(xcorr_mag)//2])
     lagIndex = lags[maxIndex]
 
-    print('Max crosscorrelation with preamble at lag ' + str(lagIndex))
+    print('[crossCorrelationMax] Max crosscorrelation with preamble at lag ' + str(lagIndex))
 
     # Plot the selected signal.
-    fig, subfigs = plt.subplots(2,1)
-
-    subfigs[0].plot(np.real(rx0), label='Real RX Signal')
-    subfigs[0].plot(np.imag(rx0), label='Imag RX Signal')
-    subfigs[0].plot(range(lagIndex, lagIndex + len(preambleSignal)), 0.004*np.real(preambleSignal), label='Preamble')
-    subfigs[0].legend()
-    subfigs[1].plot(lags, xcorr_mag, label='|X-Correlation|')
-    plt.xlabel('Sample Index', fontsize=14)
-    plt.tight_layout()
+    if debug:
+        fig, subfigs = plt.subplots(2,1)
+        scale_factor = np.mean(np.abs(rx0))/np.mean(np.abs(preambleSignal))
+        subfigs[0].plot(np.real(rx0), label='Real RX Signal')
+        subfigs[0].plot(np.imag(rx0), label='Imag RX Signal')
+        subfigs[0].plot(range(lagIndex, lagIndex + len(preambleSignal)), scale_factor*np.real(preambleSignal), label='Preamble')
+        subfigs[0].legend()
+        subfigs[1].plot(lags, xcorr_mag, label='|X-Correlation|')
+        plt.xlabel('Sample Index', fontsize=14)
+        plt.tight_layout()
 
     return lagIndex
 
@@ -430,7 +434,7 @@ def text2bits(message):
     temp_message = []
     final_message = []
     for each in message:
-        temp_message.append(format(ord(each), '08b'))
+        temp_message.append(format(ord(each), '07b'))
     for every in temp_message:
         for digit in every:
             final_message.append(int(digit))
@@ -460,10 +464,10 @@ def phaseSyncAndExtractMessage(bits_out, syncWord, numDataBits):
     # The preamble is 64 bits, the sync word is 16 bits.  So it should be in the first
     # 100 or so bits.  If you search all bits, you may find some bit string close enough
     # to the sync word by chance in the data bits, so dont search all bit decisions.
-    maxToSearch = 100 
+    maxToSearch = 120 
     lagsSynch   = signal.correlation_lags(maxToSearch, len(syncWord))
     # The "2*x-1" converts from a (0,1) bit to a (-1,1) representation
-    temp        = signal.correlate(2*bits_out[:100]-1, 2*syncWord-1)
+    temp        = signal.correlate(2*bits_out[:maxToSearch]-1, 2*syncWord-1)
     maxIndexSync = np.argmax(np.abs(temp))
     maxSync     = temp[maxIndexSync]
     # We never did phase synchronization. 
@@ -578,7 +582,7 @@ def DD_carrier_sync(z, M, BnTs, zeta=0.707, mod_type = 'MPSK', type = 0, open_lo
             e_phi[nn] = np.angle(np.exp(1j*e_phi[nn]))
         elif type == 2:
             # Ouyang and Wang 2002 MQAM paper
-            e_phi[nn] = imag(z_prime[nn]/a_hat[nn])
+            e_phi[nn] = np.imag(z_prime[nn]/a_hat[nn])
         else:
             print('Type must be 0 or 1')
         vp = K1*e_phi[nn]      # proportional component of loop filter
@@ -594,11 +598,30 @@ def DD_carrier_sync(z, M, BnTs, zeta=0.707, mod_type = 'MPSK', type = 0, open_lo
         z_prime *= z_scale
     return z_prime, a_hat, e_phi, theta_h
 
-# MAIN
-plt.ion()
+def lowpss_filter(data):
+    order = 7
+    high = 0.3
+    [beta, alpha] = signal.iirfilter(order, high, rp=3, btype='low', ftype='cheby1', output='ba')
+    filtered_data = signal.lfilter(beta, alpha, data)
+    filtered_data -= np.mean(filtered_data)
+    return filtered_data
+
+def low_pass_kaiser(samples):
+    stopband_attenuation = 60.0
+    transition_bandwidth = 0.05
+    filterN, beta = signal.kaiserord(stopband_attenuation, transition_bandwidth)
+    cutoff_norm = 0.15
+    # Create the filter coefficients
+    taps = signal.firwin(filterN, cutoff_norm, window=('kaiser', beta))
+    # Use the filter on the received signal
+    filtered_samples = signal.lfilter(taps, 1.0, samples)
+    return filtered_samples
+
+############################# MAIN #############################
+# plt.ion()
 
 # load parameters from the json script
-folder = "Shout_meas/Shout_meas_01-17-2023_11-22-15"
+folder = "Shout_meas/Shout_meas_01-20-2023_00-40-44" #12-35-21
 jsonfile = 'save_iq_w_tx_file.json'
 rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 
@@ -606,16 +629,23 @@ rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
 rx_data, _, txrxloc = traverse_dataset(folder)
 
 # Pick one received signal to demodulate
-txloc = 'cbrssdr1-smt-comp'
+txloc = 'cbrssdr1-hospital-comp'
 rxloc = 'cbrssdr1-honors-comp'
+
+rx_data[txloc] = np.vstack(rx_data[txloc])
+txloc_arr = np.array(txrxloc[txloc])
+print('[DEBUG] np.shape(rx_data[txloc])', np.shape(rx_data[txloc]))
+print('[DEBUG] txloc_arr', txloc_arr[txloc_arr==rxloc])
 
 for i in range(rxrepeat):
     # The dictionary element is a list with one element.
     # Then, there are multiple received signals, pick one
-    rx0 = rx_data[txloc][txrxloc[txloc]==rxloc][1]
-    print('Link: {} to {}'.format(txloc, txrxloc[txloc][txrxloc[txloc]==rxloc]))
+    rx0 = rx_data[txloc][txloc_arr==rxloc][i]
+    print('\nLink: {} to {}'.format(txloc, txloc_arr[txloc_arr==rxloc][i]))
 
     ### low-pass filter
+    # filtered_rx0 = lowpss_filter(rx0)
+    # filtered_rx0 = low_pass_kaiser(rx0)
     stopband_attenuation = 60.0
     transition_bandwidth = 0.05
     filterN, beta = signal.kaiserord(stopband_attenuation, transition_bandwidth)
@@ -625,7 +655,7 @@ for i in range(rxrepeat):
     # Use the filter on the received signal
     filtered_rx0 = signal.lfilter(taps, 1.0, rx0)
 
-    filtered_rx1, _, _, _ = DD_carrier_sync(filtered_rx0, 4, 0.02, zeta=0.707)
+
 
     #### Synchronization
     A         = np.sqrt(9/2)
@@ -633,18 +663,19 @@ for i in range(rxrepeat):
     alpha     = 0.5 # SRRC rolloff factor
     Lp        = 6   # Number of symbol durations on each side of peak of SRRC pulse
     preambleSignal, pulse = createPreambleSignal(A, N, alpha, Lp)
-    lagIndex = crossCorrelationMax(rx0, preambleSignal)
+    lagIndex = crossCorrelationMax(rx0, preambleSignal, debug=False)
+    print('lagIndex', lagIndex)
 
     rx1, freqOffsetEst = estimateFrequencyOffset(rx0, preambleSignal, lagIndex)
 
-    # Plot the frequency corrected signal
-    plt.figure()
-    plt.plot(np.real(rx1), label='Real RX Signal')
-    plt.plot(np.imag(rx1), label='Imag RX Signal')
-    plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
-    plt.ylabel('Signal Value', fontsize=14)
-    plt.xlabel('Sample Index', fontsize=14)
-    plt.tight_layout()
+    # # Plot the frequency corrected signal
+    # plt.figure()
+    # plt.plot(np.real(rx1), label='Real RX Signal')
+    # plt.plot(np.imag(rx1), label='Imag RX Signal')
+    # plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+    # plt.ylabel('Signal Value', fontsize=14)
+    # plt.xlabel('Sample Index', fontsize=14)
+    # plt.tight_layout()
 
     ###########################################
     # Matched filter
@@ -652,10 +683,42 @@ for i in range(rxrepeat):
     # OUTPUT: matched-filtered signal rx2
     rx2 = signal.lfilter(pulse, 1, rx1)
 
-    # Plot the matched filter output in an eye diagram (looking at each symbol period)
-    preambleStart = lagIndex + Lp*N*2  # There's also the delay b/c the pulse is this long.
-    plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
+    ###########################################
+    # Fine Frequency Offset Sync
+    filtered_rx2, a_hat, e_phi, theta_h = DD_carrier_sync(rx2, 4, 0.02, zeta=0.707, type=1)
+    # print('\n\na_hat',a_hat)
+    print('theta_h',theta_h/(2*np.pi))
 
+    # Plot the matched filter output in an eye diagram (looking at each symbol period)
+    preambleStart = lagIndex + Lp*N*2 + N  # There's also the delay b/c the pulse is this long.
+    # plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
+    
+
+    # # Plot the frequency corrected signal
+    # plt.figure()
+    # plt.plot(np.real(filtered_rx2), label='Real RX Signal')
+    # plt.plot(np.imag(filtered_rx2), label='Imag RX Signal')
+    # plt.plot(preambleStart, np.imag(filtered_rx2)[preambleStart], 'o', label='offset')
+    # plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+    # plt.ylabel('Signal Value', fontsize=14)
+    # plt.xlabel('Sample Index', fontsize=14)
+    # plt.legend()
+    # plt.tight_layout()
+    if filtered_rx2[preambleStart].imag * filtered_rx2[preambleStart].real<0:
+        degree = np.pi
+        filtered_rx2 = filtered_rx2*np.exp(-1j*degree*1/2)
+    # plot_eye_diagram(np.imag(filtered_rx2), N, offset=preambleStart)
+    # # Plot the frequency corrected signal
+    # plt.figure()
+    # plt.plot(np.real(filtered_rx2), label='Real RX Signal')
+    # plt.plot(np.imag(filtered_rx2), label='Imag RX Signal')
+    # plt.plot(preambleStart, np.imag(filtered_rx2)[preambleStart], 'o', label='offset')
+    # plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+    # plt.ylabel('Signal Value', fontsize=14)
+    # plt.xlabel('Sample Index', fontsize=14)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
     ###########################################
     # Downsample
     # INPUT: Synched matched filter output
@@ -667,9 +730,20 @@ for i in range(rxrepeat):
     startsymbol = np.where(np.abs(rx3)>0.2)[0][0]
     rx4 = rx3[startsymbol:]
 
+    # # Plot the frequency corrected signal
+    # plt.figure()
+    # plt.plot(np.real(rx4), label='Real RX Signal')
+    # plt.plot(np.imag(rx4), label='Imag RX Signal')
+    # plt.title('Freq. Corr.  TX: {} RX: {}'.format(txloc.split('-')[1], rxloc.split('-')[1]), fontsize=14)
+    # plt.ylabel('Signal Value', fontsize=14)
+    # plt.xlabel('Sample Index', fontsize=14)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
+
     # Plot a constellation diagram
     constellation_plot(rx4)
-
+    
     ###########################################
     # Symbol Decisions
     # INPUT: Symbol Samples
@@ -699,39 +773,41 @@ for i in range(rxrepeat):
     # OUTPUT: Bit error rate
     errors = np.logical_xor(data_bits,messageBits[:len(data_bits)]).sum()
     error_rate = errors/len(data_bits)
+    # print('errors',np.logical_xor(data_bits,messageBits[:len(data_bits)]))
     print("Bit Errors: %d, Bit Error Rate: %f" % (errors, error_rate))
 
     ###########################################
     print('data_bits', len(data_bits))
-    # PURPOSE: Convert a vector of zeros and ones to a string (char array)
-    # INPUT: Expects a row vector of zeros and ones, a multiple of 7 length
-    #        The most significant bit of each character is always first.
-    # OUTPUT: A string
-    def binvector2str(binvector):
-        length = len(binvector)
-        eps = np.finfo('float').eps
-        if abs(length/7 - round(length/7)) > eps:
-            print('Length of bit stream must be a multiple of 7 to convert to a string.')
-        # Each character requires 7 bits in standard ASCII
-        num_characters = round(length/7)
-        # Maximum value is first in the vector. Otherwise would use 0:1:length-1
-        start = 6
-        bin_values = []
-        while start >= 0:
-            bin_values.append(int(2**start))
-            start = start - 1
-        bin_values = np.array(bin_values)
-        bin_values = np.transpose(bin_values)
-        str_out = '' # Initialize character vector
-        for i in range(num_characters):
-            single_char = binvector[i*7:i*7+7]
-            value = 0
-            for counter in range(len(single_char)):
-                value = value + (int(single_char[counter]) * int(bin_values[counter]))
-            str_out += chr(int(value))
-        return str_out
+    # # PURPOSE: Convert a vector of zeros and ones to a string (char array)
+    # # INPUT: Expects a row vector of zeros and ones, a multiple of 7 length
+    # #        The most significant bit of each character is always first.
+    # # OUTPUT: A string
+    # def binvector2str(binvector):
+    #     length = len(binvector)
+    #     eps = np.finfo('float').eps
+    #     if abs(length/7 - round(length/7)) > eps:
+    #         print('Length of bit stream must be a multiple of 7 to convert to a string.')
+    #     # Each character requires 7 bits in standard ASCII
+    #     num_characters = round(length/7)
+    #     # Maximum value is first in the vector. Otherwise would use 0:1:length-1
+    #     start = 6
+    #     bin_values = []
+    #     while start >= 0:
+    #         bin_values.append(int(2**start))
+    #         start = start - 1
+    #     bin_values = np.array(bin_values)
+    #     bin_values = np.transpose(bin_values)
+    #     str_out = '' # Initialize character vector
+    #     for i in range(num_characters):
+    #         single_char = binvector[i*7:i*7+7]
+    #         value = 0
+    #         for counter in range(len(single_char)):
+    #             value = value + (int(single_char[counter]) * int(bin_values[counter]))
+    #         str_out += chr(int(value))
+    #     return str_out
 
 
-    message_out = binvector2str(data_bits)
-    print('Message Recieved: ')
-    print(message_out)
+    # message_out = binvector2str(data_bits)
+    # print('Message Recieved: ')
+    # print(message_out)
+plt.show()
