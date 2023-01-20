@@ -39,8 +39,10 @@ def JsonLoad(folder, json_file):
     rxfreq = config_dict['rxfreq']
     wotxrepeat = config_dict['wotxrepeat']
     rxrepeat = config_dict['rxrepeat']
+    txnodes = config_dict['txclients']
+    rxnodes = config_dict['rxclients']
 
-    return rxrepeat, rxrate
+    return rxrepeat, rxrate, txnodes, rxnodes
 
 def traverse_dataset(meas_folder):
     '''
@@ -487,7 +489,7 @@ plt.ion()
 # load parameters from the json script
 folder = "Shout_meas/Shout_meas_01-17-2023_11-22-15"
 jsonfile = 'save_iq_w_tx_file.json'
-rxrepeat, samp_rate = JsonLoad(folder, jsonfile)
+rxrepeat, samp_rate, txlocs, rxlocs = JsonLoad(folder, jsonfile)
 
 # load data from the .json, save IQ sample arrays and tx/rx names
 rx_data, _, txrxloc = traverse_dataset(folder)
@@ -495,6 +497,7 @@ rx_data, _, txrxloc = traverse_dataset(folder)
 # Pick one received signal to demodulate
 txloc = 'cbrssdr1-smt-comp'
 rxloc = 'cbrssdr1-honors-comp'
+rxlocIndex =  np.where(np.array(rxlocs) == rxloc)[0][0]
 
 for i in range(rxrepeat):
     # The dictionary element is a list with one element.
@@ -542,6 +545,7 @@ for i in range(rxrepeat):
     # Plot the matched filter output in an eye diagram (looking at each symbol period)
     preambleStart = lagIndex + Lp*N*2  # There's also the delay b/c the pulse is this long.
     plot_eye_diagram(np.imag(rx2), N, offset=preambleStart)
+
 
     ###########################################
     # Downsample

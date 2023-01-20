@@ -432,7 +432,7 @@ def text2bits(message):
     temp_message = []
     final_message = []
     for each in message:
-        temp_message.append(format(ord(each), '07b'))
+        temp_message.append(format(ord(each), '08b'))
     for every in temp_message:
         for digit in every:
             final_message.append(int(digit))
