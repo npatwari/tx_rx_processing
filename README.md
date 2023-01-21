@@ -78,15 +78,11 @@ Note: `tmux` allows multiple remote sessions to remain active even when the SSH 
 | 8 | cbrssdr1-honors-comp <--> cbrssdr1-ustar-comp | 
 
 #### Measurement analysis
-1. Check whether you have `jupyter notebook` installed locally.
-2. Make a local copy of the script we need to run:
-    ```
-    cp /share/mww2023/python/QPSK_RX.ipynb .
-    ```
-    
-3. Download the collected measurement folder:
-    ```
-    scp -r <username>@<orch_node_hostname>:/local/data/Shout_meas_01-23-2023_hour_min_sec .
-    ```
-    
-4. Change `txloc` and `rxloc` in `QPSK_RX.ipynb` based on the link assigned to your group and run the script.
+
+For the demonstration, we will analyze the received signals on Google Colab as our python notebook.  You can also certainly run the python notebook locally on your own Jupyter Notebook if you have one installed on your computer.   
+
+Make a local copy of the collected measuremnt folder by downloading them or cloning this repo.
+
+You will then load [our python notebook on Google Colab](https://colab.research.google.com/drive/1g2f8LmdU5wFYMR0MdZjbAmKMLLIxUWLe?usp=sharing).  You'll follow all of the instructions on this notebook.  That includes making a copy of the notebook (the linked file is read only); uploading the zipped measuremnt file; and picking the `txloc` and `rxloc` and `repNum` for the measurement you will analyze.  
+
+In the demo, we will attempt to organize so that each person / group looks at a different link.
