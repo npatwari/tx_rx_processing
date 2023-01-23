@@ -79,9 +79,9 @@ Note: `tmux` allows multiple remote sessions to remain active even when the SSH 
 
 #### Measurement analysis
 
-For the demonstration, we will analyze the received signals on Google Colab as our python notebook.  You can also certainly run the python notebook locally on your own Jupyter Notebook if you have one installed on your computer.   
+For the demonstration, we will analyze the received signals on Google Colab as our python notebook.  (You can also certainly run the python notebook locally on your own Jupyter Notebook if you have one installed on your computer.)   
 
-Make a local copy of the collected measuremnt folder by downloading them or cloning this repo.
+Compress the collected measuremnt folder using zip in order to upload all its files to the Colab notebook.  Or if you want a previously collected dataset, there are some in this repo.
 
 You will then load [our python notebook on Google Colab](https://colab.research.google.com/drive/1g2f8LmdU5wFYMR0MdZjbAmKMLLIxUWLe?usp=sharing).  You'll follow all of the instructions on this notebook.  That includes making a copy of the notebook (the linked file is read only); uploading the zipped measuremnt file; and picking the `txloc` and `rxloc` and `repNum` for the measurement you will analyze.  
 
