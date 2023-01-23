@@ -75,33 +75,33 @@ Note: `tmux` allows multiple remote sessions to remain active even when the SSH 
 #### SDR node pairs used for this session
 | Group Number   | Link |
 | --- | --- |
-| 1 | cbrssdr1-ustar-comp <--> cbrssdr1-hospital-comp |
-| 2 | cbrssdr1-ustar-comp <--> cbrssdr1-browning-comp |
-| 3 | cbrssdr1-smt-comp <--> cbrssdr1-honors-comp |
-| 4 | cbrssdr1-honors-comp <--> cbrssdr1-hospital-comp | 
-| 5 | cbrssdr1-bes-comp <--> cbrssdr1-smt-comp | 
-| 6 | cbrssdr1-browning-comp <--> cbrssdr1-fm-comp | 
-| 7 | cbrssdr1-browning-comp <--> cbrssdr1-bes-comp | 
-| 8 | cbrssdr1-honors-comp <--> cbrssdr1-browning-comp | 
-| 9 | cbrssdr1-browning-comp <--> cbrssdr1-ustar-comp | 
-| 10 | cbrssdr1-fm-comp <--> cbrssdr1-bes-comp | 
-| 11 | cbrssdr1-fm-comp <--> cbrssdr1-browning-comp | 
-| 12 | cbrssdr1-fm-comp <--> cbrssdr1-smt-comp | 
-| 13 | cbrssdr1-fm-comp <--> cbrssdr1-ustar-comp | 
-| 14 | cbrssdr1-smt-comp <--> cbrssdr1-bes-comp | 
-| 15 | cbrssdr1-smt-comp <--> cbrssdr1-browning-comp | 
-| 16 | cbrssdr1-smt-comp <--> cbrssdr1-fm-comp | 
-| 17 | cbrssdr1-smt-comp <--> cbrssdr1-hospital-comp |
-| 18 | cbrssdr1-hospital-comp <--> cbrssdr1-smt-comp |
-| 19 | cbrssdr1-hospital-comp <--> cbrssdr1-ustar-comp |
-| 20 | cbrssdr1-honors-comp <--> cbrssdr1-bes-comp | 
-| 21 | cbrssdr1-honors-comp <--> cbrssdr1-smt-comp | 
-| 22 | cbrssdr1-honors-comp <--> cbrssdr1-ustar-comp | 
-| 23 | cbrssdr1-ustar-comp <--> cbrssdr1-honors-comp | 
-| 24 | cbrssdr1-ustar-comp <--> cbrssdr1-smt-comp | 
-| 25 | cbrssdr1-smt-comp <--> cbrssdr1-ustar-comp |
-| 26 | cbrssdr1-hospital-comp <--> cbrssdr1-honors-comp |
-| 27 | cbrssdr1-bes-comp <--> cbrssdr1-browning-comp | 
+| 1 | cbrssdr1-ustar-comp --> cbrssdr1-hospital-comp |
+| 2 | cbrssdr1-ustar-comp --> cbrssdr1-browning-comp |
+| 3 | cbrssdr1-smt-comp --> cbrssdr1-honors-comp |
+| 4 | cbrssdr1-honors-comp --> cbrssdr1-hospital-comp | 
+| 5 | cbrssdr1-bes-comp --> cbrssdr1-smt-comp | 
+| 6 | cbrssdr1-browning-comp --> cbrssdr1-fm-comp | 
+| 7 | cbrssdr1-browning-comp --> cbrssdr1-bes-comp | 
+| 8 | cbrssdr1-honors-comp --> cbrssdr1-browning-comp | 
+| 9 | cbrssdr1-browning-comp --> cbrssdr1-ustar-comp | 
+| 10 | cbrssdr1-fm-comp --> cbrssdr1-bes-comp | 
+| 11 | cbrssdr1-fm-comp --> cbrssdr1-browning-comp | 
+| 12 | cbrssdr1-fm-comp --> cbrssdr1-smt-comp | 
+| 13 | cbrssdr1-fm-comp --> cbrssdr1-ustar-comp | 
+| 14 | cbrssdr1-smt-comp --> cbrssdr1-bes-comp | 
+| 15 | cbrssdr1-smt-comp --> cbrssdr1-browning-comp | 
+| 16 | cbrssdr1-smt-comp --> cbrssdr1-fm-comp | 
+| 17 | cbrssdr1-smt-comp --> cbrssdr1-hospital-comp |
+| 18 | cbrssdr1-hospital-comp --> cbrssdr1-smt-comp |
+| 19 | cbrssdr1-hospital-comp --> cbrssdr1-ustar-comp |
+| 20 | cbrssdr1-honors-comp --> cbrssdr1-bes-comp | 
+| 21 | cbrssdr1-honors-comp --> cbrssdr1-smt-comp | 
+| 22 | cbrssdr1-honors-comp --> cbrssdr1-ustar-comp | 
+| 23 | cbrssdr1-ustar-comp --> cbrssdr1-honors-comp | 
+| 24 | cbrssdr1-ustar-comp --> cbrssdr1-smt-comp | 
+| 25 | cbrssdr1-smt-comp --> cbrssdr1-ustar-comp |
+| 26 | cbrssdr1-hospital-comp --> cbrssdr1-honors-comp |
+| 27 | cbrssdr1-bes-comp --> cbrssdr1-browning-comp | 
 
 
 #### Measurement analysis
