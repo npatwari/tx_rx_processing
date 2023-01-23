@@ -3,6 +3,13 @@
 ## Measurement collection via SHOUT
 We use the SHOUT measurement framework to automate TX/RX functions across multiple POWDER nodes. The measurements of different communication links will later be assigned to several groups for QPSK demodulation.
 
+#### Instantiate an Experiment
+1. Log onto [POWDER](https://powderwireless.net/) 
+2. Select the [shout-long-measurement](https://www.powderwireless.net/show-profile.php?profile=2a6f2d5e-7319-11ec-b318-e4434b2381fc) profile. If you do not have access to the profile, one can be created via:
+    **`Experiments` &rarr; `Create Experiment Profile` &rarr; `Git Repo` &rarr; add [repo link](https://gitlab.flux.utah.edu/frost/proj-radio-meas) &rarr; select the profile**
+3. Start an experiment by specifying all necessary parameters [compute node type, radio types and frequency range] and finish. If the radios are not available, please create a reservation ahead of time.
+
+
 #### SSH into the orchestrator and clients
 Once the experiemnt is ready, go to `List View` for the node hostname.
 1. Use the following commands to start ssh and tmux sessions for the orchestor:
