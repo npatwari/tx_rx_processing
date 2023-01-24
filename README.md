@@ -35,7 +35,7 @@ Note: `tmux` allows multiple remote sessions to remain active even when the SSH 
         `/local/repository/etc/cmdfiles/save_iq_w_tx_file.json`.
         
     Parameters:
-    * `txamps`: which file to transmit samples from.
+    * `txsamps`: which file to transmit samples from. Note that the file should contain complex samples as float32 IQIQ...
 
     * `txrate` and `rxrate`: sampling rate at TX and RX.
 
@@ -71,6 +71,12 @@ Note: `tmux` allows multiple remote sessions to remain active even when the SSH 
     ```
     ./3.run_cmd.sh
     ```
+    
+4. Transfer the measurement file back to the local host
+   ```
+   scp -r <username>@<orch_node_hostname>:/local/data/Shout_meas_datestr_timestr /<local_dir>
+   ```
+   
 ## QPSK Demodulation
 #### SDR node pairs used for this session
 | Group Number   | Link |
