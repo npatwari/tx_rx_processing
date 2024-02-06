@@ -1,9 +1,31 @@
-# Hands-on Session: Over-the-air Narrowband QPSK Modulation and Demodulation
+## Over-the-air Narrowband QPSK Modulation and Demodulation
 
-## Measurement collection via SHOUT
-We use the SHOUT measurement framework to automate TX/RX functions across multiple POWDER nodes. The measurements of different communication links will later be assigned to several groups for QPSK demodulation.
+This tutorial goes step-by-step through the process of transmitting and receiving a narrowband digitally modulated packet over the air in [POWDER](https://powderwireless.net/).
 
-#### Instantiate an Experiment
+First, a big picture view of the software we use to run this tutorial.  We create a modulated packet signal in Python, and save it as a file. We start an experiment on POWDER with a few nodes, and specify a quiet and available frequency band to operate in.  We use the SHOUT measurement framework to automate TX/RX operations across multiple POWDER nodes, specifying the particular parameters for our experiment in a JSON file.  The shout framework allows us to transmit from one node, and receive at all of the other nodes; and then to iteratively switch the transmitting node (and receiving nodes). After Shout runs, we collect a file with the receivers' complex baseband sampled signals; we use Python to run the receiver.
+
+This tutorial assumes you have an account on [POWDER](https://powderwireless.net/) and that you're logged in.
+
+### Reserve Resources
+
+Typically, the POWDER over-the-air resources are in high demand. If you want to make sure you're going to be able to run an experiment on any particular day, it's a good idea to reserve the resources you need. In my example, I went to [Reserve Resources](https://www.powderwireless.net/resgroup.php) and reserved: 
+
+- Time: 9am - 6pm Tuesday, Feb 6.
+- Nodes: 
+  1. cbrssdr1-bes
+  2. cbrssdr1-browning
+  3. cbrssdr1-honors
+  4. cbrssdr1-hospital
+  5. cbrssdr1-meb
+- Frequency range: 3395-3405 MHz
+
+My choice of nodes and frequency band was based on the [current availability](https://www.powderwireless.net/resinfo.php). Your availability will vary. We only need about 0.5 MHz for the experiment I run, but I want to 
+- make sure my sidelobes don't exceed my reservation limits, and
+- make sure I have some space in case there is some narrowband interference at the time I run my experiment to move within my reserved band.
+
+In addition what POWDER says is an available frequency, one should see if there is usually interference in that band. We don't want to compete with other strong signals in the band. Beyond trying to be nice to other wireless systems in the area, it is just harder to demodulate our signal if it is on top of some other wireless signal. 
+
+### Instantiate an Experiment
 1. Log onto [POWDER](https://powderwireless.net/) 
 2. Select the [shout-long-measurement](https://www.powderwireless.net/show-profile.php?profile=2a6f2d5e-7319-11ec-b318-e4434b2381fc) profile. If you do not have access to the profile, one can be created via:
     **`Experiments` &rarr; `Create Experiment Profile` &rarr; `Git Repo` &rarr; add [repo link](https://gitlab.flux.utah.edu/frost/proj-radio-meas) &rarr; select the profile**
