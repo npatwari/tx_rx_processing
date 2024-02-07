@@ -42,7 +42,7 @@ Click "Next" when finished.
   
 5. *Schedule*. Put in the end time (at the least) so that someone else can use the resources after you plan to be done. Click "Finish".
 
-#### SSH into the orchestrator and clients
+### SSH into the orchestrator and clients
 Once the experiemnt is ready, go to `List View` for the node hostnames.  Each host is listed with an SSH command for you. Mine says `ssh npatwari@pc11-fort.emulab.net` in the row labelled `orch`.  This means that my username is `npatwari` and the orchestrator node is `pc11-fort.emulab.net`. There are five other `-comp` nodes, each with a hostname.  Those are my "radio hostnames".
 
 Hope you have some screen space! We're going to need two terminals connected to the orchestrator, and one terminal for each radio hostname.
@@ -67,12 +67,10 @@ We often need to change the 1) experiment parameters `save_iq_w_tx_file.json` an
 
 I use the following commands to do this:
 
-    ```
     scp <path to my local repo>/etc/cmdfiles/save_iq_w_tx_file.json <username>@<orch_node_hostname>:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
     scp <path to my local repo>/shout/QPSK_signal_2024-02-06.iq <username>@<orch_node_hostname>:/local/repository/shout/<TX signal.iq>
-    ```
 
-#### Transmission and reception 
+### Transmission and reception 
 1. Files to modify before running an experiment:
 
    - `./3.run_cmd.sh`: make sure that the CMD in line 16 is `save_iq_w_tx_file`.    
@@ -125,7 +123,7 @@ I use the following commands to do this:
    scp -r <username>@<orch_node_hostname>:/local/data/Shout_meas_<datestr>_<timestr> /<local_dir>
    ```
    
-#### Measurement analysis
+### Analyze the Received Signals
 
 For the demonstration, we will analyze the received signals on Google Colab as our python notebook.  (You can also certainly run the python notebook locally on your own Jupyter Notebook if you have one installed on your computer.)   
 
