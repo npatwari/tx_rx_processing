@@ -10,14 +10,12 @@ This tutorial assumes you have an account on [POWDER](https://powderwireless.net
 
 Typically, the POWDER over-the-air resources are in high demand. If you want to make sure you're going to be able to run an experiment on any particular day, it's a good idea to reserve the resources you need. In my example, I went to [Reserve Resources](https://www.powderwireless.net/resgroup.php) and reserved: 
 
-- Time: 9am - 6pm Tuesday, Feb 6.
+- Time: 9am - 6pm Tuesday, Jan 24.
 - Nodes: 
-  1. cbrssdr1-bes
-  2. cbrssdr1-browning
-  3. cbrssdr1-honors
-  4. cbrssdr1-hospital
-  5. cbrssdr1-meb
-- Frequency range: 3395-3405 MHz
+  1. cnode-moran
+  2. cnode-ustar
+  3. cnode-ebc
+- Frequency range: 3390-3400 MHz
 
 My choice of nodes and frequency band was based on the [current availability](https://www.powderwireless.net/resinfo.php). Your availability will vary. We only need about 0.5 MHz for the experiment I run, but I want to 
 - make sure my sidelobes don't exceed my reservation limits, and
