@@ -151,4 +151,4 @@ For the demonstration, we will analyze the received signals on Google Colab as o
 
 Compress the collected measuremnt folder using zip in order to upload all its files to the Colab notebook.  Or if you want a previously collected dataset, there are some in this repo.
 
-You will then load [our python notebook on Google Colab](https://colab.research.google.com/drive/1g2f8LmdU5wFYMR0MdZjbAmKMLLIxUWLe?usp=sharing).  You'll follow all of the instructions on this notebook.  That includes making a copy of the notebook (the linked file is read only); uploading the zipped measuremnt file; and picking the `txloc` and `rxloc` and `repNum` for the measurement you will analyze.  
+You will then load [our python notebook on Google Colab](https://colab.research.google.com/drive/1OP3-o0ORI5ho-nJp_lZEhWDgkex6B15j?usp=sharing).  You'll follow all of the instructions on this notebook.  That includes making a copy of the notebook (the linked file is read only); uploading the zipped measurement file; and picking the `txloc` and `rxloc` and `repNum` for the measurement you will analyze.  
