@@ -2,7 +2,7 @@
 
 This tutorial goes step-by-step through the process of transmitting and receiving a narrowband digitally modulated packet over the air in [POWDER](https://powderwireless.net/).
 
-First, a big picture view of the software we use to run this tutorial.  We create a modulated packet signal in Python, and save it as a file. We start a shout-long-measurement experiment on POWDER with two (or potentially more) SDR nodes, and specify a quiet and available frequency band to operate in.  We use the Shout framework to automate TX/RX operations across multiple POWDER SDR nodes, specifying the particular parameters for our experiment in a JSON file.  The shout framework allows us to transmit from one node, and receive at all of the other nodes; and then to iteratively switch the transmitting node (and receiving nodes). After Shout runs, we collect a file with the receivers' complex baseband sampled signals. Finally we use Python to run the receiver, observe the received signal, and demodulate the data.
+First, a big picture view of the software we use to run this tutorial.  We create a modulated packet signal in Python, and save it as a file. We start a shout-long-measurement experiment on POWDER with two (or potentially more) SDR nodes, and specify a quiet (at the moment) and available frequency band to operate in.  We use the Shout framework to automate TX/RX operations across multiple POWDER SDR nodes, specifying the particular parameters for our experiment in a JSON file.  The shout framework allows us to transmit from one node, and receive at all of the other nodes; and then to iteratively switch the transmitting node (and receiving nodes). After Shout runs, we collect a file with the receivers' complex baseband sampled signals. Finally we use Python to run the receiver, observe the received signal, and demodulate the data.
 
 This tutorial assumes you have an account on [POWDER](https://powderwireless.net/) and that you're logged in.
 
@@ -12,10 +12,11 @@ Typically, the POWDER over-the-air resources are in high demand. If you want to 
 
 - Nodes: 
   1. cbrssdr1-bes
-  2. cbrssdr1-fm
-- Frequency range: 3390-3400 MHz
+  2. cbrssdr1-honors
+  3. cbrssdr1-browning
+- Frequency range: 3400-3410 MHz
 
-My choice of nodes and frequency band was based on the [current availability](https://www.powderwireless.net/resinfo.php). I also checked the [POWDER Radio Info Page](https://www.powderwireless.net/radioinfo.php) to find the received power graph for potential nodes to check for current interference in the band of interest. We don't want to compete with other strong signals in the band. Beyond trying to be nice to other wireless systems in the area, it is just harder to demodulate our signal if it is on top of some other wireless signal.  I do this by clicking on the three vertical bars icon in the "Monitor" column, for the row with node "cbrssdr1-fm" (since that is one I want). I type in 3300 and 3500 into the "Min MHz" and "Max MHz" fields to zoom in. Low levels of interference will be ok (2-4 dB above the average noise floor), but more than that indicates that I should pick a different node or frequency band for my experiment.
+My choice of nodes and frequency band was based on the [current availability](https://www.powderwireless.net/resinfo.php). I also checked the [POWDER Radio Info Page](https://www.powderwireless.net/radioinfo.php) to find the received power graph for potential nodes to check for current interference in the band of interest. We don't want to compete with other strong signals in the band. Beyond trying to be nice to other wireless systems in the area, it is just harder to demodulate our signal if it is on top of some other wireless signal.  I do this by clicking on the three vertical bars icon in the "Monitor" column, for the row with node "cbrssdr1-bes" (since that is one I want). I type in 3300 and 3500 into the "Min MHz" and "Max MHz" fields to zoom in. Low levels of interference will be ok (2-4 dB above the average noise floor), but more than that indicates that I should pick a different node or frequency band for my experiment.
 
 Your availability will vary. We only need about 0.5 MHz for the experiment I run, but I want to 
 - make sure my sidelobes don't exceed my reservation limits, and
@@ -79,7 +80,7 @@ Ignore the warnings. But if the output complains about a firmware mismatch, do t
 
 We typically need to change the 1) experiment parameters `save_iq_w_tx_file.json` and 2) transmitted signal file <TX signal.iq> after instantiating the experiment. While the contents of the repository are copied, if you want to edit the parameters file on your local machine after instatiation, you need to copy the edited files to the orchestrator and each radio host.
 
-I have the `save_iq_w_tx_file.json` and transmitted signal file on my local computer. I use my python code, `QPSK_rx_sync_meles.ipynb` to generate the .iq file, and I use a text editor on my local computer to edit the `save_iq_w_tx_file.json` file. 
+I edit the `save_iq_w_tx_file.json` and transmitted signal file on my local computer. I most recently used my python code, `Siggen_digicom_OTA_QPSK 2025.ipynb` to generate a QPSK signal and save it in an `.iq` file, and I use a text editor on my local computer to edit the `save_iq_w_tx_file.json` file. 
 
 #### JSON File
 
@@ -93,20 +94,22 @@ Parameters:
     * **`txclients` and `rxclients`:** nodes for transmission and reception.
     * `rxrepeat`: number of repeated sample collection runs.
     * `sync`: whether to enable sync between TX and RX. "true" enables the use of the external (white rabbit) synchronization.
-    * `nsamps`: number of samples to be collected.
-    * `wotxrepeat`: number of repeated sample collection runs without any TX.
+    * `nsamps`: number of samples to be collected. If you make the transmitted signal have lots and lots of samples, you might want to increase this.
+    * `wotxrepeat`: number of repeated sample collection runs without any TX. I usually set this to zero, but it can be nice to know what the background interference and noise looked like.
 
 ### Copying the files to the POWDER compute nodes
 
-I use the following commands to do this for my username `npatwari`, my orchestrator node `pc11-fort.emulab.net`, and my compute nodes `pc07-fort.emulab.net` and `pc05-fort.emulab.net`. My IQ file was named `QPSK_signal_IH3_2025.iq`. On my local machine, I changed directory to the folder containing my .json and .iq files, and then ran:
+I use the following commands to do this. On my local machine, I changed directory to the folder containing my .json and .iq files, and then ran:
 ```
-scp save_iq_w_tx_file.json npatwari@pc11-fort.emulab.net:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
-scp save_iq_w_tx_file.json npatwari@pc07-fort.emulab.net:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
-scp save_iq_w_tx_file.json npatwari@pc05-fort.emulab.net:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
+scp save_iq_w_tx_file.json <username>@<orch_node_hostname>:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
+scp save_iq_w_tx_file.json <username>@<radio_hostname>:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
+scp save_iq_w_tx_file.json <username>@<radio_hostname2>:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
+scp save_iq_w_tx_file.json <username>@<radio_hostname3>:/local/repository/etc/cmdfiles/save_iq_w_tx_file.json 
 
-scp QPSK_signal_IH3_2025.iq npatwari@pc11-fort.emulab.net:/local/repository/shout/QPSK_signal_IH3_2025.iq
-scp QPSK_signal_IH3_2025.iq npatwari@pc07-fort.emulab.net:/local/repository/shout/QPSK_signal_IH3_2025.iq 
-scp QPSK_signal_IH3_2025.iq npatwari@pc05-fort.emulab.net:/local/repository/shout/QPSK_signal_IH3_2025.iq
+scp QPSK_signal_IH3_2025.iq <username>@<orch_node_hostname>:/local/repository/shout/<IQ filename>.iq
+scp QPSK_signal_IH3_2025.iq <username>@<radio_hostname1>:/local/repository/shout/<IQ filename>.iq 
+scp QPSK_signal_IH3_2025.iq <username>@<radio_hostname2>:/local/repository/shout/<IQ filename>.iq
+scp QPSK_signal_IH3_2025.iq <username>@<radio_hostname3>:/local/repository/shout/<IQ filename>.iq
 ```
 You could copy these commands to a text editor, and do a search and replace to change the username, node names, and the iq file name.
 
@@ -147,7 +150,7 @@ You could copy these commands to a text editor, and do a search and replace to c
    
 ### Analyze the Received Signals
 
-For the demonstration, we will analyze the received signals on Google Colab as our python notebook.  (You can also certainly run the python notebook locally on your own Jupyter Notebook if you have one installed on your computer.)   
+For the demonstration, we will analyze the received signals on Google Colab in a Jupyter notebook.  (You can also certainly run the Jupyter notebook locally on your own Jupyter Notebook if you have one installed on your computer.)   
 
 Compress the collected measuremnt folder using zip in order to upload all its files to the Colab notebook.  Or if you want a previously collected dataset, there are some in this repo.
 
