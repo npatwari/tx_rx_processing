@@ -1,0 +1,27 @@
+[
+ {
+    "cmd": "save_iq_w_tx",
+    "sync": true,
+    "timeout": 30,
+
+    "nsamps": 8192,
+
+    "wotxrepeat": 0,
+    
+    "txrate": 250e3,
+    "txfreq": 3405e6,
+    "txgain": {"fixed": 27.0},
+    "txsamps": {"file": "/local/repository/shout/signal_library/QPSK_signal_v2025.iq"},
+    "txwait": 3,
+    "use_lo_offset": true,
+
+    "rxrate": 250e3,
+    "rxfreq": 3405e6,
+    "rxgain": {"fixed": 30.0},
+    "rxrepeat": 4,
+    "rxwait": {"min": 50, "max": 2000, "res": "ms"},
+
+    "txclients": ["cbrssdr1-bes-comp", "cbrssdr1-browning-comp", "cbrssdr1-honors-comp"],
+    "rxclients": ["cbrssdr1-bes-comp", "cbrssdr1-browning-comp", "cbrssdr1-honors-comp"]
+ }
+]
